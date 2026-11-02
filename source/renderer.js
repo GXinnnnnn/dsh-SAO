@@ -61,7 +61,7 @@ const NativeSAO = (() => {
     }
     return { vertices: new Float32Array(vertices), indices: new Uint16Array(indices), particleCount: particles.length };
   }
-  function createRenderer(canvas, seed = 1) {
+  function createRenderer(canvas, seed = 1, viewport = null) {
     const gl = canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true });
     if (!gl) return null;
     const resources = [];
@@ -90,8 +90,8 @@ void main(){float z=position.z-camera;float f=2.414213487;gl_Position=vec4(posit
       particleCount: mesh.particleCount,
       draw(elapsedMs) {
         if (disposed || gl.isContextLost()) return;
-        const width = canvas.clientWidth || 1280, height = canvas.clientHeight || 720;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(3840*2160*2/(width*height)));
+        const width = viewport?.width || canvas.clientWidth || 1280, height = viewport?.height || canvas.clientHeight || 720;
+        const dpr = Math.min(viewport?.dpr || globalThis.devicePixelRatio || 1, 2, Math.sqrt(3840*2160*2/(width*height)));
         const pw = Math.round(width*dpr), ph = Math.round(height*dpr);
         if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
         gl.viewport(0,0,pw,ph); gl.clearColor(0,0,0,0); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);

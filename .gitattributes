@@ -1,0 +1,2 @@
+# Preserve published files byte-for-byte across Windows and other platforms.
+* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

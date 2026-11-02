@@ -1,69 +1,63 @@
-# dsh-SAO · Link Start
+# dsh-SAO · Link Start · 3.0.0
 
-仿刀剑神域开屏动画。将 SAO Utils 的彩色三维启动场景移植到 DeepSeek Harness（DSH），提供原生 WebGL 穿越动画、角色语音、轻量配色和左侧 **SAO** 控制按钮。
+仿刀剑神域开屏动画。将 SAO Utils 的原生三维彩色启动场景移植到 DeepSeek Harness（DSH），以 Worker、OffscreenCanvas 和 WebGL 播放，并保留原始桐人 Link Start 语音与 NerveGear 启动音效。动画结束后恢复完整 DSH 界面。
 
 ![原生 4K 场景](assets/animation-4k.png)
 
-## 安装
+## 安装最新版本
 
-已构建的 Cordis bundle，仓库根目录就是插件，不需要先构建或运行安装脚本。在 DSH 插件管理器中添加以下安装源，或使用 CLI：
+在 **DSH → 插件 → 添加插件 → 包名/仓库名** 中输入：
 
-```sh
-dsh plugin add github:GXinnnnnn/dsh-SAO#v2.0.2
+```text
+github:GXinnnnnn/dsh-SAO
 ```
 
-也可以从 [Releases](https://github.com/GXinnnnnn/dsh-SAO/releases) 下载 `dsh-SAO.tgz`，通过 DSH 的插件管理器安装。若管理器要求提交引用，使用对应版本的完整 commit SHA。根据返回的 `application` / `nextStep` 刷新页面或重启；`applied` 才表示已应用。
+仓库根目录是已构建的 Cordis bundle，无需先构建或运行安装脚本。该地址安装默认分支在安装时的内容，不表示自动更新。升级请替换已有插件，避免同时启用副本；包名为 `@local/dsh-sao-link-start`，bundle 节点为 `sao-link-start`。`private: true` 不影响 GitHub 安装。
 
-包名 `@local/dsh-sao-link-start`，bundle 节点 `sao-link-start`。保留与 2.0.0 相同的包名和设置键，升级时请替换已有版本，避免并行启用副本。`private: true` 表示不向 npm 发布，不影响 GitHub 安装。
+当前版本为 **3.0.0：纯启动动画**。已通过真实 DSH 的早期注入、独立绘制、正常结束、主题基线对照和 Esc 清理检查。已构建发布包见 [最新版 Release](https://github.com/GXinnnnnn/dsh-SAO/releases/latest)。
 
-## 使用
+## 播放行为
 
-- 打开 DSH 时播放一次；**SAO** 默认位于左侧头像上方，较 2.0.1 上移 56 CSS 像素。点击打开设置，面板向右展开。
-- 鼠标或触屏上下拖动 **SAO** 可任意调整高度；松手后自动保存，刷新仍保留。水平位置固定在左侧，窗口变小时会限制在可见范围内。
-- 聚焦 SAO 后使用 **↑ / ↓** 按 10 像素微调，**Home** 或设置中的“恢复默认位置”回到头像上方。拖动结束不会误触打开设置。
-- 可重播、切换桐人／亚丝娜、调整音量，分别开关自动播放、声音和界面配色。
-- **Esc** 随时结束动画并停止声音；“跳过”按钮在右上角悬停或通过 Tab 聚焦时显示。
-- 设置面板会随控件高度调整并限制在窗口内，窄屏和矮窗口下可滚动。默认位置与鲸鱼余额挂件相交时会避开占位；手动高度优先。
-- 系统启用“减少动态效果”或无法使用 WebGL 时，使用 0.9 秒静态无声开场。
-- 浏览器阻止自动声音时，点击有声重播即可。偏好仅存于当前浏览器。
-- 停用插件会撤销配色层、移除样式和事件，停止声音并释放 WebGL 资源。
+Host 在生成页面时将启动脚本前置注入 HTML head。脚本立即创建不透明白色遮罩，覆盖 DSH 内容窗口，遮住后台界面加载；前端继续初始化时，独立 Worker 绘制彩色胶囊场景。桐人语音和启动音效通过同一 AudioContext 预先排程，两段起点相隔 1 秒，场景同样在语音开始约 1 秒后推进。
 
-![设置面板](assets/settings.png)
+- 初始桌面窗口隐藏时，等待窗口可见才启动动画时钟和声音。
+- **Esc** 可随时跳过，并停止声音、结束 Worker、清理动画资源。右上角“跳过”可通过悬停或键盘 Tab 聚焦显示。
+- 浏览器阻止自动声音时，只显示临时“点击有声播放”提示；点击后从头开始这次开场，完成后提示随动画一起消失。
+- 系统启用“减少动态效果”或无法取得 WebGL 时，使用约 0.9 秒静态无声开场。缺少 Worker／OffscreenCanvas 的浏览器退回主线程 WebGL，前端繁忙时的流畅性会受主线程影响。
+- 没有常驻控件、设置面板、角色选择、偏好保存或主题配色。旧版本留下的偏好不参与本次播放，也不会被插件读取后应用或改写。
 
-动画在 DSH 客户端加载插件后播放，不替换 Electron 原生启动窗口。测试宿主为 DSH **0.2.1-rc.5 / Windows / Edge**；其他 DSH 版本尚未验证。
+覆盖范围是 **DSH 内容窗口**。插件不能先于 Electron 原生窗口或 Host 就绪运行，也不能强制操作系统全屏；窗口化使用时覆盖该窗口的网页区域。
 
 ## 还原与 4K
 
-按原包的粒子分布、七种基础颜色、胶囊网格、顶点明暗和相机方程移植。镜头匀速，透视形成迎面加速感；白色背景和实体圆柱独立退场。正式播放像原版一样使用时间种子，不固定每次布局。
+保留原包的粒子分布、七种基础颜色、胶囊网格、顶点明暗和相机方程。镜头匀速，透视形成迎面加速感；白色背景和实体圆柱独立退场。每次播放采用时间种子。
 
-3840×2160 原生画布，验证过 100%、150%、200% 显示缩放；根据真实时间推进，最大 2 倍像素密度，像素预算约 1660 万。不承诺所有设备都达到固定帧率。
+已在独立浏览器验证 3840×2160 物理画布，以及 150%、200% 缩放对应的 4K 画布。渲染按时间推进，最大 2 倍像素密度，像素预算约 1660 万；不承诺所有设备达到固定帧率。
 
-![固定种子与时间的原版对照](assets/original-vs-plugin.png)
+![原生场景数学移植的固定种子对照](assets/original-vs-plugin.png)
 
-D3D9 与 WebGL 在抗锯齿、边缘和部分重叠面的光栅化上有差异，不宣称逐像素相同。声音字节未改动；声画衔接选用角色语音结束后开始场景，尚未证明是原程序精确声画延迟。参数、RVA、哈希和方法见 [SOURCE.md](SOURCE.md)。
+这张历史对照验证同种子、同时间的原生场景数学移植，不是 3.0.0 Host 集成验收。D3D9 与 WebGL 在抗锯齿、边缘和部分重叠面存在差异，不宣称逐像素相同。音频保留原始字节；选用的 1 秒声画衔接偏移尚未证明为原程序精确常量。参数与原始哈希见 [SOURCE.md](SOURCE.md)。
 
 ## 源码与重建
 
-- [client.js](client.js)：自包含客户端，使用 DSH 自带 React。
-- [source/renderer.js](source/renderer.js)：粒子、网格、原生参数及 WebGL 渲染器。
-- [source/client.template.js](source/client.template.js)：面板、声音、配色和生命周期。
-- [source/build.py](source/build.py)：Python 标准库重建，校验原始 WAV 哈希后内嵌声音。
-- [cordis.patch.yml](cordis.patch.yml)：bundle 定义，使用正式 `shell.overlay` 和 theme token 接口。
+- [index.js](index.js)：Host 入口，监听 `webserver/index-inject`，在 head 前置内联启动脚本。
+- [startup.js](startup.js)：预构建启动脚本，内嵌渲染器、Worker 和两段已校验原始 WAV。
+- [source/startup.template.js](source/startup.template.js)：早期遮罩、声音排程、可见性、回退与清理。
+- [source/worker.js](source/worker.js)：独立动画时钟和 OffscreenCanvas 绘制。
+- [source/renderer.js](source/renderer.js)：原生参数、粒子、网格及 WebGL 渲染器。
+- [source/build.py](source/build.py)：Python 标准库重建，验证 WAV 哈希后合并脚本。
+- [cordis.patch.yml](cordis.patch.yml)：Cordis bundle 定义。
 
-成品可直接使用。若自行重建，需自行提供原始 SAO ZIP；仓库不包含原始完整 ZIP、DLL 或原程序：
+实现不使用 `dsh.client`、React、slots 或 theme 服务。预构建成品可直接安装；自行重建需要原始 SAO ZIP，公开仓库不包含完整 ZIP、DLL 或原程序：
 
 ```sh
 python source/build.py --archive /path/to/SAO.zip
 ```
 
-2.0.2 调整默认位置到头像上方，新增鼠标／触屏垂直拖动、记忆高度、键盘微调和恢复默认。原版场景渲染器、原始声音和原有偏好保持兼容。20 项独立浏览器检查与 28 项真实 DSH 检查通过，覆盖播放、资源清理、4K、拖动后不误点、刷新持久化、触摸取消、越界限制和矮窗口面板。
+当前 16 项独立浏览器检查通过，包括早期遮罩、原声排程、完成与 Esc 清理、回退、物理 4K、无主题／存储修改，以及主线程停顿时 Worker 继续绘制。1200ms 主线程阻塞实验记录 244 帧、最大帧间隔 17.5ms；这是单次测试结果，不是所有硬件的性能保证。另有 9 项真实 DSH 检查通过；旧版客户端入口已迁移，前端模块图和页面不再包含旧版 SAO 按钮、设置或主题层。
 
 ## 素材与许可
 
-这是非官方爱好者项目，与 SAO 权利方、GPBeta 或 DeepSeek 没有隶属或背书关系。SAO Utils / NERvGear 来源与声音归属见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+这是非官方爱好者项目，与 SAO 权利方、GPBeta 或 DeepSeek 没有隶属或背书关系。新编写的集成代码使用 MIT；第三方原声、提取的图标、相关角色及商标不在该许可内，未确认其再分发授权，不能把整包视为 MIT。
 
-本项目为混合许可内容：新编写的 DSH 集成代码使用 MIT；内嵌的第三方声音、相关角色及商标不在该许可内，未确认其再分发授权，不能把整包视为 MIT 或据此获得第三方素材使用权。详见 [LICENSE](LICENSE)。
-
-## 市场收录
-
-GitHub 是直接安装源。社区插件市场与皮肤市场分别维护收录仓库，提交 PR 并不等于已上架；维护者合并后才会进入相应目录。DSH 官方 Discover 显示用户主动添加的索引，并没有面向所有默认安装自动启用的公共市场。
+图标来自 SAOHF.exe 的原始图标资源，保留提取的 ICO 和 256×256 PNG，公开包不含来源 EXE。来源与哈希见 [第三方说明](THIRD_PARTY_NOTICES.md)，许可范围见 [LICENSE](LICENSE)。

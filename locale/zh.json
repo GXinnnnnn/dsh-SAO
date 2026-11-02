@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "SAO · Link Start",
-    "description": "仿刀剑神域 4K 开屏动画与原版语音；SAO 控件默认在头像上方，支持上下拖动并记住高度。"
+    "description": "仿刀剑神域纯启动动画：Host 提前注入、4K 独立渲染与原声，DSH 界面在后台加载；不修改主题，不保留常驻控件。"
   }
 }

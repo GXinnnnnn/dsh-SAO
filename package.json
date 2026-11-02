@@ -1,37 +1,25 @@
 {
   "name": "@local/dsh-sao-link-start",
-  "version": "2.0.2",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "仿刀剑神域开屏动画，支持 4K 与可拖动高度的 SAO 控件",
+  "description": "仿刀剑神域开屏动画，4K 早启动与独立渲染，不修改主题；DSH 添加插件输入 github:GXinnnnnn/dsh-SAO",
   "author": "GXinnnnnn",
   "license": "SEE LICENSE IN LICENSE",
   "repository": { "type": "git", "url": "https://github.com/GXinnnnnn/dsh-SAO.git" },
+  "icon": "./icon.png",
   "homepage": "https://github.com/GXinnnnnn/dsh-SAO#readme",
   "bugs": { "url": "https://github.com/GXinnnnnn/dsh-SAO/issues" },
-  "keywords": ["dsh-plugin", "dsh-skin", "sao", "link-start", "webgl"],
+  "keywords": ["dsh-plugin", "sao", "link-start", "startup-animation", "webgl"],
   "exports": {
     ".": "./index.js",
-    "./client": "./client.js",
-    "./icon": "./icon.svg",
+    "./host": "./index.js",
+    "./host/icon": "./icon.png",
+    "./host/locale/*.json": "./locale/*.json",
+    "./icon": "./icon.png",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["index.js", "client.js", "cordis.patch.yml", "icon.svg", "locale", "source", "README.md", "SOURCE.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "screenshots.json", "assets"],
-  "peerDependencies": {
-    "@deepseek-ai/dsh-client-ui-layout": ">=0.2.1-rc.5 <0.2.2-0",
-    "@deepseek-ai/dsh-client-ui-theme": ">=0.2.1-rc.5 <0.2.2-0"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-client-ui-layout": { "optional": true },
-    "@deepseek-ai/dsh-client-ui-theme": { "optional": true }
-  },
-  "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
-    "client": {
-      "platform": "web",
-      "immediately": true,
-      "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-theme"]
-    }
-  }
+  "files": ["index.js", "startup.js", "cordis.patch.yml", "icon.png", "icon.ico", "locale", "source", "README.md", "SOURCE.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "screenshots.json", "assets"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
 }
