@@ -1,0 +1,37 @@
+{
+  "name": "@local/dsh-sao-link-start",
+  "version": "2.0.1",
+  "private": true,
+  "type": "module",
+  "description": "仿刀剑神域开屏动画",
+  "author": "GXinnnnnn",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": { "type": "git", "url": "https://github.com/GXinnnnnn/dsh-SAO.git" },
+  "homepage": "https://github.com/GXinnnnnn/dsh-SAO#readme",
+  "bugs": { "url": "https://github.com/GXinnnnnn/dsh-SAO/issues" },
+  "keywords": ["dsh-plugin", "dsh-skin", "sao", "link-start", "webgl"],
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "icon.svg", "locale", "source", "README.md", "SOURCE.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "screenshots.json", "assets"],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.2.1-rc.5 <0.2.2-0",
+    "@deepseek-ai/dsh-client-ui-theme": ">=0.2.1-rc.5 <0.2.2-0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-ui-layout": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-theme": { "optional": true }
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-theme"]
+    }
+  }
+}
