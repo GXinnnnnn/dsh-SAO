@@ -1,6 +1,6 @@
 # dsh-SAO · Link Start
 
-dsh仿刀剑神域开屏动画。将 SAO Utils 的原生三维彩色启动场景移植到 DeepSeek Harness（DSH），以 Worker、OffscreenCanvas 和 WebGL 播放，并保留原始桐人 Link Start 语音与 NerveGear 启动音效。动画结束后恢复完整 DSH 界面。
+dsh仿刀剑神域游戏进入动画，以 Worker、OffscreenCanvas 和 WebGL 播放，并保留原始桐人 Link Start 语音与 NerveGear 启动音效。动画结束后恢复完整 DSH 界面。
 
 ![原生 4K 场景](assets/animation-4k.png)
 
