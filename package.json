@@ -1,9 +1,9 @@
 {
   "name": "@local/dsh-sao-link-start",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "type": "module",
-  "description": "仿刀剑神域开屏动画",
+  "description": "仿刀剑神域开屏动画，支持 4K 与可拖动高度的 SAO 控件",
   "author": "GXinnnnnn",
   "license": "SEE LICENSE IN LICENSE",
   "repository": { "type": "git", "url": "https://github.com/GXinnnnnn/dsh-SAO.git" },

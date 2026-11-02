@@ -9,7 +9,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const MEDIA = __SAO_MEDIA__;
     const KEY = 'dsh-sao-link-start.v1';
-    const DEFAULTS = { skin: true, startup: true, sound: true, volume: 0.65, voice: 'kirito' };
+    const DEFAULTS = { skin: true, startup: true, sound: true, volume: 0.65, voice: 'kirito', launcherBottom: null };
     const TOKENS = {
       '--dsw-alias-bg-base': { light: '#f2f6f8', dark: '#10191f' },
       '--dsw-alias-bg-layer-1': { light: '#ffffff', dark: '#17232b' },
@@ -37,9 +37,9 @@ window.__ModuleLoader__.load({
 .sao-skip{opacity:0;transition:opacity .15s;position:absolute;right:28px;top:24px;border:1px solid #78919e;background:#152430dd;color:#fff;padding:9px 15px;border-radius:3px;font-size:12px!important}
 .sao-skip:hover,.sao-skip:focus-visible{opacity:1}
 .sao-sound-hint{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);background:#142632ed;color:#fff;border:1px solid #80b9ce;border-radius:3px;padding:11px 18px;max-width:90%;font-size:12px!important}
-.sao-tools{--sao-tools-bottom:18px;position:absolute;left:20px;bottom:var(--sao-tools-bottom);display:flex;flex-direction:row-reverse;align-items:flex-end;gap:10px;pointer-events:auto}
-.sao-launch{height:38px;width:44px;border:1px solid #8ea9b5;background:#1c303a;color:#f7bc62;box-shadow:0 3px 14px #0002;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);letter-spacing:.08em;font-size:11px!important;font-weight:700!important}
-.sao-panel{width:310px;max-width:calc(100vw - 84px);max-height:calc(100vh - var(--sao-tools-bottom) - 16px);overflow:auto;background:#f5f8fa;color:#233c49;border:1px solid #aec3ce;border-radius:5px;box-shadow:0 12px 45px #07141c35;padding:22px}
+.sao-tools{--sao-tools-bottom:74px;position:absolute;left:20px;bottom:var(--sao-tools-bottom);display:flex;flex-direction:row-reverse;align-items:flex-end;gap:10px;pointer-events:auto}
+.sao-launch{touch-action:none;user-select:none;cursor:ns-resize!important;height:38px;width:44px;border:1px solid #8ea9b5;background:#1c303a;color:#f7bc62;box-shadow:0 3px 14px #0002;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);letter-spacing:.08em;font-size:11px!important;font-weight:700!important}
+.sao-panel{width:310px;max-width:calc(100vw - 84px);max-height:calc(100vh - 24px);transform:translateY(var(--sao-panel-offset,0px));overflow:auto;background:#f5f8fa;color:#233c49;border:1px solid #aec3ce;border-radius:5px;box-shadow:0 12px 45px #07141c35;padding:22px}
 .sao-panel header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .sao-panel header i{width:5px;height:20px;background:#c07616;transform:skew(-16deg)}
 .sao-panel h2{font-size:16px;letter-spacing:.08em;margin:0;font-weight:600}
@@ -49,9 +49,10 @@ window.__ModuleLoader__.load({
 .sao-panel input[type=range]{width:130px;accent-color:#986017}
 .sao-panel select{max-width:145px;border:1px solid #9fb8c4;background:white;color:#233c49;padding:5px;border-radius:3px;font-size:12px}
 .sao-panel .sao-play{width:100%;padding:11px;background:#253d49;border:1px solid #253d49;color:#fff;border-radius:3px;margin-top:15px;font-size:13px;letter-spacing:.06em}
+.sao-panel .sao-reset{margin-top:10px;padding:6px 9px;border:1px solid #9fb8c4;border-radius:3px;background:transparent;color:#233c49;font-size:11px}
 .sao-panel .sao-note{font-size:11px;color:#567280;line-height:1.7;margin:12px 0 0}
 .sao-panel footer{margin-top:18px;border-top:1px solid #cfdee6;padding-top:12px;font-size:10px;letter-spacing:.08em;color:#617e8b}
-@media(max-width:500px){.sao-tools{--sao-tools-bottom:10px;left:10px;gap:6px}.sao-panel{padding:16px}.sao-skip{right:16px;top:16px}}
+@media(max-width:500px){.sao-tools{--sao-tools-bottom:66px;left:10px;gap:6px}.sao-panel{padding:16px}.sao-skip{right:16px;top:16px}}
 @media(prefers-reduced-motion:reduce){.sao-root *{scroll-behavior:auto}}
 `;
     function loadPreferences() {
@@ -61,6 +62,7 @@ window.__ModuleLoader__.load({
         for (const key of ['skin', 'startup', 'sound']) if (typeof p[key] === 'boolean') output[key] = p[key];
         if (typeof p.volume === 'number' && Number.isFinite(p.volume)) output.volume = Math.min(1, Math.max(0, p.volume));
         if (p.voice === 'asuna' || p.voice === 'kirito') output.voice = p.voice;
+        if (typeof p.launcherBottom === 'number' && Number.isFinite(p.launcherBottom)) output.launcherBottom = Math.max(10, p.launcherBottom);
         return output;
       } catch { return { ...DEFAULTS }; }
     }
@@ -163,34 +165,89 @@ window.__ModuleLoader__.load({
         const [playing, setPlaying] = React.useState(() => p.startup);
         const [blocked, setBlocked] = React.useState(false);
         const panelRef = React.useRef(null), launchRef = React.useRef(null), toolsRef = React.useRef(null);
-        // The optional whale widget occupies the same corner above shell.overlay.
-        // Keep its hit area intact and place our controls above its actual bounds.
+        const dragRef = React.useRef(null), suppressClick = React.useRef(false);
+        const positionRef = React.useRef(null);
+        // Default clearance is one 44px avatar plus a 12px gap above the old edge.
+        // A user's chosen height takes precedence; clamp only to keep the control visible.
         React.useLayoutEffect(() => {
           if (playing) return;
           let frame = 0;
           const watched = new WeakSet();
           const resize = new ResizeObserver(schedule);
           const mutations = new MutationObserver(schedule);
-          function update() {
-            frame = 0;
+          function position(requested) {
             const tools = toolsRef.current, button = launchRef.current;
-            if (!tools || !button) return;
+            if (!tools || !button) return 0;
             const height = window.innerHeight, bounds = button.getBoundingClientRect();
             const gap = window.matchMedia('(max-width: 500px)').matches ? 10 : 18;
-            let bottom = gap;
-            for (const widget of document.querySelectorAll('.dshwv-root')) {
+            const custom = requested !== null;
+            let bottom = custom ? requested : gap + 56;
+            if (!custom) for (const widget of document.querySelectorAll('.dshwv-root')) {
               if (!watched.has(widget)) { watched.add(widget); resize.observe(widget); mutations.observe(widget, { attributes: true, attributeFilter: ['style', 'class'] }); }
               const r = widget.getBoundingClientRect();
-              if (r.width > 0 && r.height > 0 && r.right > bounds.left && r.left < bounds.right && r.top < height - gap && r.bottom > height - gap - 38) bottom = Math.max(bottom, height - r.top + 12);
+              if (r.width > 0 && r.height > 0 && r.right > bounds.left && r.left < bounds.right && r.top < height - bottom && r.bottom > height - bottom - 38) bottom = Math.max(bottom, height - r.top + 12);
             }
-            tools.style.setProperty('--sao-tools-bottom', `${Math.min(bottom, Math.max(gap, height - 60))}px`);
+            bottom = Math.min(Math.max(10, bottom), Math.max(10, height - 48));
+            tools.style.setProperty('--sao-tools-bottom', `${bottom}px`);
+            const panel = panelRef.current;
+            const offset = panel ? Math.max(0, 12 - (height - bottom - panel.offsetHeight)) : 0;
+            tools.style.setProperty('--sao-panel-offset', `${offset}px`);
+            return bottom;
+          }
+          positionRef.current = position;
+          function update() {
+            frame = 0;
+            position(dragRef.current?.bottom ?? controller.get().launcherBottom);
           }
           function schedule() { if (!frame) frame = requestAnimationFrame(update); }
           mutations.observe(document.body, { childList: true, subtree: true });
+          if (panelRef.current) resize.observe(panelRef.current);
           window.addEventListener('resize', schedule);
           update();
-          return () => { cancelAnimationFrame(frame); mutations.disconnect(); resize.disconnect(); window.removeEventListener('resize', schedule); };
-        }, [playing]);
+          return () => { positionRef.current = null; dragRef.current = null; cancelAnimationFrame(frame); mutations.disconnect(); resize.disconnect(); window.removeEventListener('resize', schedule); };
+        }, [playing, open, p.launcherBottom]);
+        function dragStart(event) {
+          if (!event.isPrimary || event.button !== 0) return;
+          suppressClick.current = false;
+          const bottom = window.innerHeight - event.currentTarget.getBoundingClientRect().bottom;
+          dragRef.current = { id: event.pointerId, y: event.clientY, start: bottom, bottom, moved: false };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        function dragMove(event) {
+          const drag = dragRef.current;
+          if (!drag || event.pointerId !== drag.id) return;
+          const delta = drag.y - event.clientY;
+          if (!drag.moved && Math.abs(delta) < 5) return;
+          drag.moved = true;
+          event.preventDefault();
+          drag.bottom = positionRef.current?.(drag.start + delta) ?? drag.bottom;
+        }
+        function dragEnd(event, cancelled = false) {
+          const drag = dragRef.current;
+          if (!drag || event.pointerId !== drag.id) return;
+          dragRef.current = null;
+          if (drag.moved) {
+            suppressClick.current = true;
+            if (cancelled) positionRef.current?.(controller.get().launcherBottom);
+            else controller.update('launcherBottom', Math.round(drag.bottom));
+          }
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        function launchClick(event) {
+          if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; return; }
+          suppressClick.current = false;
+          setOpen(value => !value);
+        }
+        function moveWithKeyboard(event) {
+          if (!['ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) return;
+          event.preventDefault();
+          if (event.key === 'Home') controller.update('launcherBottom', null);
+          else {
+            const bottom = window.innerHeight - launchRef.current.getBoundingClientRect().bottom;
+            const next = positionRef.current?.(bottom + (event.key === 'ArrowUp' ? 10 : -10));
+            if (Number.isFinite(next)) controller.update('launcherBottom', Math.round(next));
+          }
+        }
         const finish = React.useCallback(() => setPlaying(false), []);
         const markBlocked = React.useCallback(() => setBlocked(true), []);
         const replay = React.useCallback(() => { setBlocked(false); setOpen(false); setRun(value => value + 1); setPlaying(true); }, []);
@@ -217,8 +274,10 @@ window.__ModuleLoader__.load({
               h('label', null, h('span', null, `音量 ${Math.round(p.volume * 100)}%`), h('input', { type: 'range', 'aria-label': '启动声音音量', min: 0, max: 1, step: 0.05, value: p.volume, onChange: event => controller.update('volume', Number(event.target.value)) })),
               h('button', { type: 'button', className: 'sao-play', onClick: replay }, '▷  重播 Link Start'),
               h('p', { className: 'sao-note', role: 'status' }, blocked ? '浏览器拦截了自动声音。点击重播即可用手势启动；关闭声音后仍可播放动画。' : 'Esc 可随时跳过。系统开启“减少动态效果”时，使用简短静态开场并静音。'),
+              h('p', { className: 'sao-note' }, '上下拖动 SAO 调整高度；方向键微调，Home 恢复默认。'),
+              h('button', { type: 'button', className: 'sao-reset', onClick: () => controller.update('launcherBottom', null) }, '恢复默认位置'),
               h('footer', null, 'ORIGINAL SCENE · WEBGL · 4K')),
-            h('button', { ref: launchRef, type: 'button', className: 'sao-launch', 'aria-label': 'Link Start 设置与重播', 'aria-expanded': open, onClick: () => setOpen(value => !value), title: 'Link Start 设置与重播' }, 'SAO')),
+            h('button', { ref: launchRef, type: 'button', className: 'sao-launch', 'aria-label': 'Link Start 设置与重播', 'aria-expanded': open, onClick: launchClick, onPointerDown: dragStart, onPointerMove: dragMove, onPointerUp: event => dragEnd(event), onPointerCancel: event => dragEnd(event, true), onLostPointerCapture: event => dragEnd(event, true), onKeyDown: moveWithKeyboard, title: '点击设置 · 上下拖动调整高度' }, 'SAO')),
           playing && h(Startup, { key: run, preferences: p, run, onFinish: finish, onBlocked: markBlocked, onReplay: replay }));
       };
     }
