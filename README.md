@@ -1,4 +1,4 @@
-# dsh-SAO · Link Start
+# dsh-SAO
 
 dsh仿刀剑神域游戏进入动画，以 Worker、OffscreenCanvas 和 WebGL 播放，并保留原始桐人 Link Start 语音与 NerveGear 启动音效。动画结束后恢复完整 DSH 界面。
 
@@ -14,7 +14,13 @@ github:GXinnnnnn/dsh-SAO
 
 仓库根目录是已构建的 Cordis bundle，无需先构建或运行安装脚本。该地址安装默认分支在安装时的内容，不表示自动更新。升级请替换已有插件，避免同时启用副本；包名为 `@local/dsh-sao-link-start`，bundle 节点为 `sao-link-start`。`private: true` 不影响 GitHub 安装。
 
-当前版本为 *纯启动动画**。已通过真实 DSH 的早期注入、独立绘制、正常结束、主题基线对照和 Esc 清理检查。已构建发布包见 [最新版 Release](https://github.com/GXinnnnnn/dsh-SAO/releases/latest)。
+**纯启动动画**。已通过真实 DSH 的早期注入、独立绘制、正常结束、主题基线对照和 Esc 清理检查。已构建发布包见 [最新版 Release](https://github.com/GXinnnnnn/dsh-SAO/releases/latest)。
+
+## 皮肤市场适配
+
+皮肤市场使用仓库的 `market/` 子目录。它保留相同的 Host 提前注入，并包含可独立播放、支持卸载清理的 Web 客户端回退入口；两种入口共享同一播放标记，一次页面加载只播放一次。两种安装方式都显示为 **dsh-SAO**，只播放启动动画，不改变主题。请选择一种安装方式，切换前停用或移除已有副本，避免重复安装。
+
+仓库根目录仍采用纯 Host 入口，保持上面的简短安装地址。市场适配包的已构建代码由 `python source/build-market.py` 生成，使用相同的场景、原声和图标。内部 package 版本字段用于安装系统识别，不属于展示名称。
 
 ## 播放行为
 
@@ -34,7 +40,7 @@ Host 在生成页面时将启动脚本前置注入 HTML head。脚本立即创�
 
 已在独立浏览器验证 3840×2160 物理画布，以及 150%、200% 缩放对应的 4K 画布。渲染按时间推进，最大 2 倍像素密度，像素预算约 1660 万；不承诺所有设备达到固定帧率
 
-这张历史对照验证同种子、同时间的原生场景数学移植，不是 3.0.0 Host 集成验收。D3D9 与 WebGL 在抗锯齿、边缘和部分重叠面存在差异，不宣称逐像素相同。音频保留原始字节；选用的 1 秒声画衔接偏移尚未证明为原程序精确常量。参数与原始哈希见 [SOURCE.md](SOURCE.md)。
+这张历史对照验证同种子、同时间的原生场景数学移植，不是 Host 集成验收。D3D9 与 WebGL 在抗锯齿、边缘和部分重叠面存在差异，不宣称逐像素相同。音频保留原始字节；选用的 1 秒声画衔接偏移尚未证明为原程序精确常量。参数与原始哈希见 [SOURCE.md](SOURCE.md)。
 
 ## 源码与重建
 
@@ -46,7 +52,7 @@ Host 在生成页面时将启动脚本前置注入 HTML head。脚本立即创�
 - [source/build.py](source/build.py)：Python 标准库重建，验证 WAV 哈希后合并脚本。
 - [cordis.patch.yml](cordis.patch.yml)：Cordis bundle 定义。
 
-实现不使用 `dsh.client`、React、slots 或 theme 服务。预构建成品可直接安装；自行重建需要原始 SAO ZIP，公开仓库不包含完整 ZIP、DLL 或原程序：
+仓库根目录包不使用 `dsh.client`；市场适配包提供实际 Web 客户端回退入口。两者都不使用 React、slots 或 theme 服务。预构建成品可直接安装；自行重建需要原始 SAO ZIP，公开仓库不包含完整 ZIP、DLL 或原程序：
 
 ```sh
 python source/build.py --archive /path/to/SAO.zip

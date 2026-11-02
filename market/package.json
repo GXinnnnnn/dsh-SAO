@@ -1,0 +1,50 @@
+{
+  "name": "@local/dsh-sao-market",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "仿刀剑神域开屏动画，4K 早启动与独立渲染，不修改主题；DSH 添加插件输入 github:GXinnnnnn/dsh-SAO",
+  "author": "GXinnnnnn",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GXinnnnnn/dsh-SAO.git",
+    "directory": "market"
+  },
+  "homepage": "https://github.com/GXinnnnnn/dsh-SAO#readme",
+  "icon": "./icon.png",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./icon": "./icon.png",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "startup.js",
+    "cordis.patch.yml",
+    "icon.png",
+    "icon.ico",
+    "locale",
+    "assets",
+    "screenshots.json",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "SOURCE.md",
+    "BUILD.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [],
+      "external": [],
+      "immediately": true
+    }
+  }
+}

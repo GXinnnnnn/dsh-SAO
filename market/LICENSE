@@ -1,0 +1,42 @@
+dsh-SAO — mixed-license distribution
+
+1. Newly authored DSH integration code
+
+MIT License
+Copyright (c) 2026 GXinnnnnn
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the newly authored DSH integration code and associated original documentation
+(the "Software"), to deal in the Software without restriction, including without
+limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+2. Excluded third-party content
+
+The permission above does NOT cover embedded third-party audio, original
+SAO Utils / NERvGear material, SAO characters, names, trademarks, or any other
+pre-existing third-party rights. In particular, client.js embeds the three
+original WAV recordings identified in THIRD_PARTY_NOTICES.md. Their inclusion
+does not establish that the project author owns or can license those recordings.
+No confirmed redistribution license for these recordings was found in the
+supplied material. All such rights remain with their respective owners.
+
+This is not a blanket MIT license for the built client or the complete bundle.
+No license to the excluded content is granted here. Anyone redistributing or
+reusing it must establish the applicable permissions independently. The new
+integration and browser implementation do not claim ownership of the original
+work or recovered scene design. Attribution is not a substitute for permission.
+
+See THIRD_PARTY_NOTICES.md and SOURCE.md for provenance and scope.
