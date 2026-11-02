@@ -1,4 +1,4 @@
-# dsh-SAO · Link Start · 3.0.0
+# dsh-SAO · Link Star
 
 仿刀剑神域开屏动画。将 SAO Utils 的原生三维彩色启动场景移植到 DeepSeek Harness（DSH），以 Worker、OffscreenCanvas 和 WebGL 播放，并保留原始桐人 Link Start 语音与 NerveGear 启动音效。动画结束后恢复完整 DSH 界面。
 
@@ -14,7 +14,7 @@ github:GXinnnnnn/dsh-SAO
 
 仓库根目录是已构建的 Cordis bundle，无需先构建或运行安装脚本。该地址安装默认分支在安装时的内容，不表示自动更新。升级请替换已有插件，避免同时启用副本；包名为 `@local/dsh-sao-link-start`，bundle 节点为 `sao-link-start`。`private: true` 不影响 GitHub 安装。
 
-当前版本为 **3.0.0：纯启动动画**。已通过真实 DSH 的早期注入、独立绘制、正常结束、主题基线对照和 Esc 清理检查。已构建发布包见 [最新版 Release](https://github.com/GXinnnnnn/dsh-SAO/releases/latest)。
+当前版本为 *纯启动动画**。已通过真实 DSH 的早期注入、独立绘制、正常结束、主题基线对照和 Esc 清理检查。已构建发布包见 [最新版 Release](https://github.com/GXinnnnnn/dsh-SAO/releases/latest)。
 
 ## 播放行为
 
@@ -32,9 +32,7 @@ Host 在生成页面时将启动脚本前置注入 HTML head。脚本立即创�
 
 保留原包的粒子分布、七种基础颜色、胶囊网格、顶点明暗和相机方程。镜头匀速，透视形成迎面加速感；白色背景和实体圆柱独立退场。每次播放采用时间种子。
 
-已在独立浏览器验证 3840×2160 物理画布，以及 150%、200% 缩放对应的 4K 画布。渲染按时间推进，最大 2 倍像素密度，像素预算约 1660 万；不承诺所有设备达到固定帧率。
-
-![原生场景数学移植的固定种子对照](assets/original-vs-plugin.png)
+已在独立浏览器验证 3840×2160 物理画布，以及 150%、200% 缩放对应的 4K 画布。渲染按时间推进，最大 2 倍像素密度，像素预算约 1660 万；不承诺所有设备达到固定帧率
 
 这张历史对照验证同种子、同时间的原生场景数学移植，不是 3.0.0 Host 集成验收。D3D9 与 WebGL 在抗锯齿、边缘和部分重叠面存在差异，不宣称逐像素相同。音频保留原始字节；选用的 1 秒声画衔接偏移尚未证明为原程序精确常量。参数与原始哈希见 [SOURCE.md](SOURCE.md)。
 
@@ -58,6 +56,6 @@ python source/build.py --archive /path/to/SAO.zip
 
 ## 素材与许可
 
-这是非官方爱好者项目，与 SAO 权利方、GPBeta 或 DeepSeek 没有隶属或背书关系。新编写的集成代码使用 MIT；第三方原声、提取的图标、相关角色及商标不在该许可内，未确认其再分发授权，不能把整包视为 MIT。
+这是非官方爱好者项目，与 SAO 权利 或 DeepSeek 没有隶属或背书关系。新编写的集成代码使用 MIT；第三方原声、提取的图标、相关角色及商标不在该许可内，未确认其再分发授权，不能把整包视为 MIT。
 
 图标来自 SAOHF.exe 的原始图标资源，保留提取的 ICO 和 256×256 PNG，公开包不含来源 EXE。来源与哈希见 [第三方说明](THIRD_PARTY_NOTICES.md)，许可范围见 [LICENSE](LICENSE)。
