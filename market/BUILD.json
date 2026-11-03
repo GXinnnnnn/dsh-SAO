@@ -1,6 +1,0 @@
-{
-  "builder": "source/build-market.py",
-  "startupSha256": "8c5c4da1f1da6f1add14abcc1e3e9a0c6f69bd19537a203d0cdaa7d2fac14ecf",
-  "clientSha256": "21709aabd9ab04a58d4eab7a6f27f25172137e6bee984e574131fc8f9eadef7d",
-  "iconSha256": "d024cfb3ee2750f9bdb429ef4f8a77402d65aca65cccd1a4ce24a3b7112b9c72"
-}

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "builtin-1",
+    "source": "SAO (1).jpg",
+    "sourceSha256": "2d52ebb748a37038f8f58a40fd347219d69c2d262e8eb60e8745694b5fda34a0",
+    "file": "1.webp",
+    "size": [
+      3840,
+      2160
+    ],
+    "sha256": "ffe16d651d7527846e402df0760926bdcec668c649e66f36fb4fa403365f7000",
+    "sizeBytes": 711858
+  },
+  {
+    "id": "builtin-2",
+    "source": "SAO (1).png",
+    "sourceSha256": "d99a2eaf8ff630129a52bc3508efab3b23aa50b187b5ab25f0383619916b26eb",
+    "file": "2.webp",
+    "size": [
+      1920,
+      1080
+    ],
+    "sha256": "9b01b0fc63f6f3bfdc8b14fd49209b29e4e342612c7c40df34848795c2f9aac7",
+    "sizeBytes": 320818
+  },
+  {
+    "id": "builtin-3",
+    "source": "SAO (2).jpg",
+    "sourceSha256": "3c0352ebbd2050e72c54534edc1abf5e0c86b9c425dfdda5a1fc9a15bde38630",
+    "file": "3.webp",
+    "size": [
+      3840,
+      2074
+    ],
+    "sha256": "e7c64e1c1ec6716bc5a7f4bcb358d4b84d0c501785438684adce76e96ffa24f7",
+    "sizeBytes": 835364
+  },
+  {
+    "id": "builtin-4",
+    "source": "SAO (3).jpg",
+    "sourceSha256": "2a4c941452363183566812a682a24871b5ac6829b2bc0977e1047bd82eed0381",
+    "file": "4.webp",
+    "size": [
+      1920,
+      1080
+    ],
+    "sha256": "1781a70a1d5aabf6b6612fa7ee530c3f75f3d5c509d1f58dd0caf33ba88703e1",
+    "sizeBytes": 209440
+  },
+  {
+    "id": "builtin-5",
+    "source": "p2618837824.jpg",
+    "sourceSha256": "75b7c42997bcd1339fa48813117bff6c48ff107b791b3344597a1de7a4705365",
+    "file": "5.webp",
+    "size": [
+      1920,
+      1080
+    ],
+    "sha256": "a10d49bb8b273c886241802f7d74b0f5225ae8f27a7386d3a2d9900ec0fde7de",
+    "sizeBytes": 148534
+  },
+  {
+    "id": "builtin-6",
+    "source": "ANIME-PICTURES.NET_-_223635-2560x1600-sword+art+online-a-1+pictures-yuuki+asuna-single-long+hair-blush.png",
+    "sourceSha256": "9827b7a81982e6cbc1d2a7d6824c9826afd0cf3ff29a76ffa7292028ac289a4d",
+    "file": "6.webp",
+    "size": [
+      2560,
+      1600
+    ],
+    "sha256": "b43734d5c230a096c27a606e41dfa5d9dd86c33306831d7b3bd330d1f10b2e51",
+    "sizeBytes": 161632
+  },
+  {
+    "id": "builtin-7",
+    "source": "797442.png",
+    "sourceSha256": "91233f11643abdedf60a5a53f3fad21f31e02da9a45ee9c305a10fb644ce50c3",
+    "file": "7.webp",
+    "size": [
+      3456,
+      2160
+    ],
+    "sha256": "8f71ffba7ccd7466ca2ebb32ba13a5491b2087af1084e852b9ccc2038797a9fe",
+    "sizeBytes": 152094
+  },
+  {
+    "id": "builtin-8",
+    "source": "632078.png",
+    "sourceSha256": "71f9f359eaf4bf76688a72a8fdaabee77de08337cdf6d6d8f762c847c5f13b4c",
+    "file": "8.webp",
+    "size": [
+      1920,
+      1080
+    ],
+    "sha256": "488924f3e2cc49613ba05040a9de9a7c7b9f90f2856e87f646cec95df001f54d",
+    "sizeBytes": 432164
+  },
+  {
+    "id": "builtin-9",
+    "source": "p2544087357.jpg",
+    "sourceSha256": "96c7d8af8753da5adc32147299a1ae972dd80beff16ec0be6782e280e984ec54",
+    "file": "9.webp",
+    "size": [
+      2560,
+      1440
+    ],
+    "sha256": "a41ac9302e185d6ef4549e169e2409501be07800f4fa4cec21af1fa0e04a3176",
+    "sizeBytes": 344770
+  }
+]

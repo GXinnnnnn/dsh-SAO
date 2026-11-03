@@ -1,89 +1,36 @@
-# 原版场景证据与 3.0.0 纯启动动画移植范围
+# Source and build
 
-场景来源是用户提供的 `SAO.zip`（1,225,499,490 字节、12,799 个成员）中的 SAO Utils 彩色启动场景。分析阶段实际执行了独立解压副本，用 PE 静态检查、Capstone 反汇编、原程序画面与浏览器输出交叉核对。REA 当时没有可用连接，这些是普通静态和运行证据，不是 REA Evidence。没有获取或宣称持有原项目源码。
+The root package is `@local/dsh-sao-link-start` and the standalone market package is `@local/dsh-sao-market`; both retain version `3.0.0` and provide the same features.
 
-3.0.0 沿用这份原生场景数学移植，将 DSH 集成改为 Host 早期注入、独立 Worker 和预排程原声。下面的历史原生对照与当前 Host 验证分开记录。
+The prebuilt runtime is included. `index.js` injects `startup.js` in the document head before frontend initialization. `client.js` registers the package with the DSH ModuleLoader and uses the host's React for settings, appearance and model intensity controls.
 
-## 原始组件
+- `source/startup.template.js`, `renderer.js`, `thin-renderer.js` and `worker.js` produce the startup runtime.
+- `source/settings-panel.js`, `appearance.js`, `liquid-glass.js` and `model-intensity.js` produce the client runtime.
+- `assets/wallpapers/` contains the nine shipped wallpaper copies. `assets/animation-previews/` contains renderer-generated preview images; the adjacent provenance records identify their sources and hashes.
 
-旧版归档成员 `SAO Utils/NERvGear.dll`：SHA-256 `551f33efe4dcf12bd79b5ccd935a7935c053ba19435965deddb6aeb84df5f1fd`，PE ImageBase `0x10000000`。
+## Build the theme client
 
-独立解压副本以 XML 配置 `Appearance.BootAnimate=1` 播放实际场景，关闭该副本的系统开机项、更新检查、Steam 功能和声音；测试后终止该次启动的进程。原始 ZIP 与用户现有安装没有改变。该场景在核心 DLL 中，运行时不依赖主题插件。
+Python 3 and its standard library are sufficient. From either package directory, run:
 
-作者 GPBeta 的公开演示 [《开机动画，但是 SAO Utils 2》](https://www.bilibili.com/video/BV1TZ4y1Q7UL/) 也展示了实体圆柱、圆帽、曲面明暗及白幕先退出的场景。视频章节标题和 Windows 忙光标均未复制。
-
-## 原生算法对应
-
-以下地址为该 DLL 的 RVA；绝对 VA = ImageBase + RVA。移植实现见 [source/renderer.js](source/renderer.js)。
-
-| RVA | 证据及移植逻辑 |
-| --- | --- |
-| `0x74d70` | 9 个深度层 z=0,10,…,80；每层 4 个半径环，初始 0.4、每环加 0.3；每环 30 个方向。方向步长 0.20943951606750488 弧度。 |
-| `0x74ee3` 起 | 按层概率筛选候选位置：约 0.1、0.3、0.5、0.7、0.9、0.5、0.1、0.02、0.004；保留单精度浮点运算。随机消费顺序：筛选、XY 抖动、Z 抖动、颜色、长度。 |
-| `0x1124c0` / `0x1124d8` | XY 抖动 -0.05/-0.025/0/0.025/0.05，同一抖动加到 x 和 y；Z 抖动 -1.5/-0.5/0/0.5/1.5。原生 z 中额外包含 radius×sin(angle)，也予以保留。 |
-| `0x167870` | 七种 RGB：`c01a1c`、`19cd16`、`20d5ce`、`d41ed5`、`cccd19`、`646464`、`050505`。没有另加蓝色。 |
-| `0x750e0` / `0x753b0` | 胶囊形长圆柱，半径 0.05，长度 3/8/16；6 个纬度环（0/36/72/108/144/180°），每环 12 个顶点。 |
-| `0x75502` 起 | 曲面颜色烘焙到顶点：shade=trunc(float32(240.28749084472656+1124.75×localY))；每个颜色通道为 `(channel×255×shade)>>16`。 |
-| `0x73bf4` 起 | 垂直视场角 0.7853981852531433 弧度，纵横比按窗口，近面 0.1、远面 100。 |
-| `0x741f0` / `0x74218` 起 | cameraZ=elapsed_ms/35−40；4250ms 后结束。镜头匀速，投影随深度变化形成迎面加速感。 |
-| `0x72d30` 起 | 白色中心、灰色角的三角扇背景，与有深度测试的实体圆柱分别绘制。背景在 cameraZ -40→-20 渐入、50→60 渐出；柱体独立离场。 |
-| `0x75390` | 原生 srand(GetTickCount())；保留 MSVCR80 rand 的 LCG：state=214013×state+2531011，返回 (state>>>16)&32767。浏览器播放取时间种子。 |
-
-固定种子 1 时生成 366 根柱体、26352 个网格顶点。没有循环回收柱体、叠加中心白光或引入二次相机加速曲线。
-
-## 历史同种子、同时间原版对照
-
-为避免每次随机布局造成不可比，分析副本仅暂时固定两项：RVA `0x75399` 的种子返回值为 1；RVA `0x74218` 的 elapsed_ms 为 350、800、1200、1500、1800、2400、3000、3300、3700。没有改动网格、颜色、相机、绘制或背景逻辑。捕获后还原 DLL，并复核上述 SHA-256。
-
-浏览器渲染器以相同种子和时间生成对照。位置、长度选择、圆帽、主要颜色、透视和整体阶段能够对应。D3D9 与 WebGL 的光栅化、抗锯齿边缘、部分重叠面仍存在差异；原版捕获也可能含桌面挂件。不使用“逐像素完全一致”表述，也不把色块重叠率当主观还原度百分比。
-
-仓库包含清洁中段画面的 [并排对照](assets/original-vs-plugin.png)。它验证沿用的原生场景数学，不是 3.0.0 Host 注入和声音时序的完整验收。原生二进制、完整反汇编与原始桌面采样不随公开插件分发。
-
-## 两段精确提取的原始声音
-
-当前构建只包含归档 `SAO Utils 2/Packages/com.gpbeta.theme.sao/Sounds/` 下的两段声音：
-
-| 文件 | 字节 | 时长 | SHA-256 |
-| --- | ---: | ---: | --- |
-| LinkStart.SAO.Kirito.wav | 176510 | 1.00036s | 76b95783418d693017414b6e5039f19a9533e7b9f2e3c5c48527ecf7a3b1a2c5 |
-| Startup.SAO.NerveGear.wav | 688006 | 3.9s | b593b79c9d3ad9a2c16c660760190bc28ab417c1d508595f1f61287415071b15 |
-
-两者均为 44.1kHz 双声道 PCM16 WAV。[构建脚本](source/build.py) 先验证 SHA-256，再以 Base64 原字节内嵌，不裁剪、不重新编码。运行时同步解析 PCM16 采样，按 `sample / 32768` 填入 AudioContext 的 AudioBuffer，不依赖异步音频解码完成后才排程。
-
-两段声音在同一次启动调用中排程：桐人语音起点为当前 AudioContext 时间加约 40ms，NerveGear 起点再加 1 秒；场景使用对应的 1 秒前导。初始窗口隐藏时先等待可见再启动时钟和声音。浏览器自动播放策略可能使 AudioContext 暂停，此时用临时手势提示恢复并从头开始本次开场，不承诺绕过浏览器限制。
-
-**1 秒间隔是插件选用的衔接策略，尚未恢复或证明原组件精确声画延迟常量。** 原始录音未替换为合成声音，当前构建没有其他角色录音。
-
-## 3.0.0 Host 入口与动画执行
-
-[Host 入口](index.js) 读取预构建 [startup.js](startup.js)，监听 `webserver/index-inject`，对注入表执行：
-
-```js
-table.unshift({ kind: 'script', placement: 'head', text });
+```sh
+python source/build-theme.py
 ```
 
-脚本在前端模块初始化前添加不透明白色根遮罩，遮住 DSH 背景加载；专用 Worker 使用 OffscreenCanvas／WebGL 独立推进场景。[启动模板](source/startup.template.js) 同步准备声音、启动 Worker 并排程音频后，将主线程交还给前端加载。它不使用 `dsh.client`、React、slots、theme 服务、常驻控件、设置面板、偏好或存储。
+This command uses the included `startup.js`, wallpapers and animation previews. It needs no original audio archive and does not rebuild or modify `startup.js`. In the repository root it builds both packages and copies root screenshots to the market package. In the standalone market package it rebuilds that package only. `python source/build-market.py` is an equivalent compatibility entry point.
 
-[Worker](source/worker.js) 与主线程共享时间基准，渲染器按真实时间计算相机位置。缺少 Worker／OffscreenCanvas 时退回主线程 WebGL；无 GPU 或减少动态效果时使用约 0.9 秒静态无声开场。Esc 停止本次动画；结束时终止 Worker、撤销 Blob URL、释放声音／渲染资源并移除自有 DOM 和事件。
+ModuleLoader IDs are read from each package's manifest; the version and existing export aliases are retained. Generated files contain no timestamps. Each package keeps its own README and package-local screenshot links.
 
-插件的边界为 DSH 内容窗口：不能早于 Electron 原生窗口或 Host 就绪运行，不能强制操作系统全屏。Host 注入顺序也不等于原生桌面程序的启动顺序。
+## Rebuild startup audio and animation
 
-## 图标来源
+Rebuilding `startup.js` requires an externally supplied original `SAO.zip`; that archive is not distributed here:
 
-图标来自 `SAOHF.exe` 的 **RT_GROUP_ICON 101，语言 1033**。保留提取的 [ICO](icon.ico) 与资源中精确的 256×256 [PNG](icon.png)，[assets/icon.png](assets/icon.png) 为同一 PNG。PNG SHA-256：
-
-```text
-d024cfb3ee2750f9bdb429ef4f8a77402d65aca65cccd1a4ce24a3b7112b9c72
+```sh
+python source/build.py --archive /path/to/SAO.zip
+python source/build-theme.py
 ```
 
-公开插件不包含来源 EXE。图标是第三方素材，不作为新编写代码的 MIT 内容；提取和归属说明不代表已取得再分发授权。
+The script reads the three original WAV files under `SAO Utils 2/Packages/com.gpbeta.theme.sao/Sounds/`, verifies their SHA-256 values and embeds their unchanged bytes. The required filenames and hashes are recorded in `THIRD_PARTY_NOTICES.md` and `source/build.py`.
 
-## 当前验证与发布边界
+The optional `source/prepare-wallpapers.py` uses Pillow and separately supplied source images in a sibling `image` directory. It is unnecessary for the theme build; the prepared wallpapers are included.
 
-当前 16 项独立浏览器检查通过，包括 head 早期遮罩、两段 PCM 排程、Worker 实际彩色绘制、正常结束与 Esc 清理、无主题／存储修改、兼容回退、临时声音提示及 DPR 1／1.5／2 的物理 4K。1200ms 主线程阻塞实验记录 244 帧、最大帧间隔 17.5ms，这是单次实验指标，不代表所有硬件固定帧率。
-
-当前测试环境为 Windows／Edge、DSH 0.2.1-rc.5。3.0.0 的 9 项真实 Host 检查已通过：head 注入早于 ModuleLoader，独立 Worker 完成开场，旧客户端节点与常驻 DOM 均为空，原有主题与动画在首行退出的对照一致，未增加 JavaScript 错误，Esc 即时撤场。已有其他皮肤的 remote.session 注入错误在对照中同样出现。真实桌面进程冷启动隐藏／显示时序与人工听感尚未单独验收；不把上述通过结论外推为这两项已覆盖。
-
-在 DSH“添加插件 → 包名/仓库名”使用 `github:GXinnnnnn/dsh-SAO` 获取默认分支在安装时的内容。该地址不提供自动更新承诺。
-
-新编写代码使用 MIT；第三方声音、提取图标和原作相关权利均排除在外，见 [LICENSE](LICENSE) 和 [第三方说明](THIRD_PARTY_NOTICES.md)。
+New integration code and the liquid-glass adaptation retain their respective MIT notices. Embedded audio, icons, wallpapers and other pre-existing material have separate rights and exclusions; see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md).

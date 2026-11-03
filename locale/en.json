@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "dsh-SAO",
-    "description": "Pure SAO startup animation: early Host injection, independent 4K rendering and original audio while DSH loads underneath. No theme changes or persistent controls."
+    "description": "Two startup animations, Kirito/Asuna voices, theme colors, liquid/frosted glass, adjustable wallpapers and model intensity controls. Configure in DSH Settings → dsh-SAO."
   }
 }

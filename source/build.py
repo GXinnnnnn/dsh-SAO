@@ -8,6 +8,7 @@ parser.add_argument('--archive', type=Path, default=local_archive if local_archi
 args = parser.parse_args()
 expected = {
     'kirito': ('LinkStart.SAO.Kirito.wav', '76b95783418d693017414b6e5039f19a9533e7b9f2e3c5c48527ecf7a3b1a2c5'),
+    'asuna': ('LinkStart.SAO.Asuna.wav', 'fafaf001f3980d274a072e9d1364a0b98c5934fb442e169554c8af7b6a2399be'),
     'startup': ('Startup.SAO.NerveGear.wav', 'b593b79c9d3ad9a2c16c660760190bc28ab417c1d508595f1f61287415071b15')
 }
 media = {}
@@ -19,6 +20,7 @@ with zipfile.ZipFile(args.archive) as archive:
         media[key] = 'data:audio/wav;base64,' + base64.b64encode(data).decode('ascii')
 source = (root / 'source' / 'startup.template.js').read_text(encoding='utf-8')
 renderer = (root / 'source' / 'renderer.js').read_text(encoding='utf-8')
+renderer += '\n' + (root / 'source' / 'thin-renderer.js').read_text(encoding='utf-8')
 worker = renderer + '\n' + (root / 'source' / 'worker.js').read_text(encoding='utf-8')
 for placeholder, value in [('__SAO_MEDIA__', json.dumps(media, separators=(',', ':'))), ('__SAO_WORKER__', json.dumps(worker)), ('__SAO_RENDERER__', renderer)]:
     if source.count(placeholder) != 1:
