@@ -122,11 +122,70 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   const contextRootSelector = '[data-sidebar-right-session] div[data-sidebar-right-tab] .lc-root';
   const contextCardSelector = contextRootSelector + ' .lc-card';
   const isContextCard = el => el.matches(contextCardSelector) && !el.parentElement?.closest('.lc-card');
-  let contextRects = [];
+  const contextCardsObserved = new Set(), contextViewportsObserved = new Set();
+  let contextCardPaths = [];
+  // Clip rounded card footprints to their visible scroll viewport. The mask
+  // remains in the gutters, while each card still paints once over wallpaper.
+  function clippedCardPolygon(rect, clip, corners) {
+    const {x,y,width:w,height:h} = rect;
+    if (!(w>0 && h>0 && clip.right>clip.left && clip.bottom>clip.top) || x+w<=clip.left || x>=clip.right || y+h<=clip.top || y>=clip.bottom) return [];
+    const radii = corners.map(pair => pair.map(v => Math.max(0,Number.isFinite(v)?v:0)));
+    const scale = Math.min(1,w/Math.max(1,radii[0][0]+radii[1][0]),w/Math.max(1,radii[3][0]+radii[2][0]),h/Math.max(1,radii[0][1]+radii[3][1]),h/Math.max(1,radii[1][1]+radii[2][1]));
+    const points = [];
+    for (let i=0;i<4;i++) {
+      const [rx,ry]=radii[i].map(v=>v*scale), right=i===1||i===2, bottom=i>=2;
+      const cx=right?x+w-rx:x+rx, cy=bottom?y+h-ry:y+ry;
+      for (let step=0;step<=8;step++) {
+        const angle=(180+i*90+step*90/8)*Math.PI/180;
+        points.push([cx+rx*Math.cos(angle),cy+ry*Math.sin(angle)]);
+      }
+    }
+    let polygon=points;
+    for (const [axis,edge,greater] of [[0,clip.left,true],[0,clip.right,false],[1,clip.top,true],[1,clip.bottom,false]]) {
+      const input=polygon; polygon=[];
+      if (!input.length) break;
+      let previous=input[input.length-1], wasInside=greater?previous[axis]>=edge:previous[axis]<=edge;
+      for (const point of input) {
+        const inside=greater?point[axis]>=edge:point[axis]<=edge;
+        if (inside!==wasInside) {
+          const t=(edge-previous[axis])/(point[axis]-previous[axis]);
+          polygon.push([previous[0]+(point[0]-previous[0])*t,previous[1]+(point[1]-previous[1])*t]);
+        }
+        if (inside) polygon.push(point);
+        previous=point; wasInside=inside;
+      }
+    }
+    return polygon;
+  }
   function updateContextRoots() {
     const active = contextMode(preferences) !== 'off' ? [...document.querySelectorAll(contextRootSelector)].filter(el => { const r=el.getBoundingClientRect(); return r.width>0 && r.height>0 && getComputedStyle(el).visibility!=='hidden'; }) : [];
     for (const el of contextTouched) if (!active.includes(el)) { el.removeAttribute('data-sao-context'); resizeObserver?.unobserve(el); contextTouched.delete(el); }
-    contextRects = active.map(el => { if (!el.hasAttribute('data-sao-context')) el.setAttribute('data-sao-context',''); contextTouched.add(el); const r=el.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; });
+    const cards=[], viewports=new Set(); contextCardPaths=[];
+    for (const root of active) {
+      if (!root.hasAttribute('data-sao-context')) root.setAttribute('data-sao-context','');
+      contextTouched.add(root);
+      const viewport=root.getBoundingClientRect();
+      for (const card of root.querySelectorAll('.lc-card')) {
+        if (!isContextCard(card) || getComputedStyle(card).visibility!=='visible') continue;
+        const r=card.getBoundingClientRect(); if (!(r.width>0 && r.height>0)) continue;
+        cards.push(card);
+        const clip={left:Math.max(viewport.left,rightBounds?.x??0),top:Math.max(viewport.top,rightBounds?.y??0),right:Math.min(viewport.right,rightBounds?rightBounds.x+rightBounds.width:innerWidth),bottom:Math.min(viewport.bottom,rightBounds?rightBounds.y+rightBounds.height:innerHeight)};
+        for (let parent=card.parentElement;parent;parent=parent.parentElement) {
+          const css=getComputedStyle(parent), box=parent.getBoundingClientRect();
+          if ((/^(auto|scroll|hidden|clip)$/.test(css.overflowX) || /^(auto|scroll|hidden|clip)$/.test(css.overflowY)) && parent!==frameHost && parent!==wallHost && parent!==observedRight && !active.includes(parent)) viewports.add(parent);
+          if (/^(auto|scroll|hidden|clip)$/.test(css.overflowX)) { clip.left=Math.max(clip.left,box.left+parent.clientLeft); clip.right=Math.min(clip.right,box.left+parent.clientLeft+parent.clientWidth); }
+          if (/^(auto|scroll|hidden|clip)$/.test(css.overflowY)) { clip.top=Math.max(clip.top,box.top+parent.clientTop); clip.bottom=Math.min(clip.bottom,box.top+parent.clientTop+parent.clientHeight); }
+          if (parent===frameHost) break;
+        }
+        const css=getComputedStyle(card), pair=value=>{ const values=value.trim().split(/\s+/); return [values[0],values[1]||values[0]].map((v,i)=>parseFloat(v)*(v.endsWith('%')?(i?r.height:r.width)/100:1)); };
+        const polygon=clippedCardPolygon({x:r.x,y:r.y,width:r.width,height:r.height},clip,[css.borderTopLeftRadius,css.borderTopRightRadius,css.borderBottomRightRadius,css.borderBottomLeftRadius].map(pair));
+        if (polygon.length>=3) contextCardPaths.push(polygon);
+      }
+    }
+    for (const card of contextCardsObserved) if (!cards.includes(card)) { resizeObserver?.unobserve(card); contextCardsObserved.delete(card); }
+    for (const card of cards) contextCardsObserved.add(card);
+    for (const viewport of contextViewportsObserved) if (!viewports.has(viewport)) { resizeObserver?.unobserve(viewport); contextViewportsObserved.delete(viewport); }
+    for (const viewport of viewports) contextViewportsObserved.add(viewport);
   }
   let conversationBounds = {x:0,y:0,width:innerWidth,height:innerHeight}, rightBounds = null, observedRight = null;
   const rightScene = () => ({opacity: preferences.rightLinked ? preferences.conversationOpacity : preferences.rightOpacity, blur: preferences.rightLinked ? preferences.conversationBlur : preferences.rightBlur});
@@ -138,10 +197,10 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     element.hidden = !box || opacity === 0 && diffusion === 0;
     if (element === rightBackdrop && element.getAttribute('data-sao-scene-material') !== material) element.setAttribute('data-sao-scene-material',material);
     if (!box) return;
-    // Exclude context content from the full-column mask. Its own cards paint
-    // once over the wallpaper, including when dock panes are split side by side.
-    const holes = element === rightBackdrop ? contextRects.map(r => ({x:Math.max(0,r.x-box.x),y:Math.max(0,r.y-box.y),right:Math.min(box.width,r.x+r.width-box.x),bottom:Math.min(box.height,r.y+r.height-box.y)})).filter(r => r.right>r.x && r.bottom>r.y) : [];
-    const path = holes.length ? `M0 0H${box.width}V${box.height}H0Z ` + holes.map(r => `M${r.x} ${r.y}H${r.right}V${r.bottom}H${r.x}Z`).join(' ') : '';
+    // Only visible primary card interiors bypass the right-column mask.
+    // Gutters and rounded corners keep the right scene's existing alpha/blur.
+    const holes = element === rightBackdrop ? contextCardPaths : [];
+    const path = holes.length ? `M0 0H${box.width}V${box.height}H0Z ` + holes.map(points => points.map(([x,y],i)=>`${i?'L':'M'}${(x-box.x).toFixed(2)} ${(y-box.y).toFixed(2)}`).join(' ')+'Z').join(' ') : '';
     const css = `position:absolute;left:${box.x-bounds.x}px;top:${box.y-bounds.y}px;width:${box.width}px;height:${box.height}px;pointer-events:none;border-radius:${element === rightBackdrop ? '16px' : radius + ' 0 0 0'};corner-shape:${corner};isolation:isolate;overflow:hidden;clip-path:${path ? `path(evenodd,"${path}")` : 'none'};--sao-edge-strength:${4*opacity*(1-opacity)};background:rgb(${sceneColor().map(v=>v*255).join(' ')} / ${opacity});backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'};-webkit-backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'}`;
     if (backdropStyles.get(element) !== css) { element.style.cssText = css; backdropStyles.set(element,css); }
   }
@@ -186,6 +245,8 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     if (right) { if (!right.hasAttribute('data-sao-wall-column')) right.setAttribute('data-sao-wall-column',''); if (!right.hasAttribute('data-sao-wall-right')) right.setAttribute('data-sao-wall-right',''); layoutTouched.add(right); }
     if (wallHost !== column || observedRight !== right) { resizeObserver?.disconnect(); resizeObserver?.observe(column); resizeObserver?.observe(frame); if (right) resizeObserver?.observe(right); wallHost = column; observedRight = right; }
     for (const root of contextTouched) resizeObserver?.observe(root);
+    for (const card of contextCardsObserved) resizeObserver?.observe(card);
+    for (const viewport of contextViewportsObserved) resizeObserver?.observe(viewport);
   }
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
     if (disposed || !frameHost) return;
@@ -322,14 +383,16 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
     const surfaceMode = el => isContextCard(el) ? contextGlass : isRight(el) ? rightGlass : p.glass;
     const surfaces = glass ? chooseSurfaces().filter(el => surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el) || isContextCard(el))) : [];
     // Include orphaned markers from earlier clients, not only nodes owned by this instance.
-    for (const el of new Set([...touched,...document.querySelectorAll('[data-sao-material]')])) if (!surfaces.includes(el)) { for (const attr of materialAttributes) el.removeAttribute(attr); touched.delete(el); }
+    let contextShapeChanged = false;
+    for (const el of new Set([...touched,...document.querySelectorAll('[data-sao-material]')])) if (!surfaces.includes(el)) { if (isContextCard(el)) contextShapeChanged = true; for (const attr of materialAttributes) el.removeAttribute(attr); touched.delete(el); }
     for (const el of surfaces) {
       if (!el.hasAttribute('data-sao-material') && getComputedStyle(el).position === 'static') el.setAttribute('data-sao-positioned','');
       if (el.getAttribute('data-sao-material') !== surfaceMode(el)) el.setAttribute('data-sao-material', surfaceMode(el));
       const zone = isContextCard(el) ? 'context' : isWindow(el) ? 'window' : isRightHeader(el) ? 'header-right' : isHeader(el) ? 'header' : isComposer(el) ? 'composer' : isRight(el) ? 'right' : 'conversation'; if (el.getAttribute('data-sao-zone') !== zone) el.setAttribute('data-sao-zone', zone);
-      const type = (isHeader(el) || isRightHeader(el) || el.matches(rightBodySelector) || el.matches('[data-dockkit-content],[data-dockkit-empty],[data-sidebar-right-panel]')) ? 'joined' : 'floating'; if (el.getAttribute('data-sao-surface') !== type) el.setAttribute('data-sao-surface', type);
+      const type = (isHeader(el) || isRightHeader(el) || el.matches(rightBodySelector) || el.matches('[data-dockkit-content],[data-dockkit-empty],[data-sidebar-right-panel]')) ? 'joined' : 'floating'; if (el.getAttribute('data-sao-surface') !== type) { if (isContextCard(el)) contextShapeChanged = true; el.setAttribute('data-sao-surface', type); }
       touched.add(el);
     }
+    if (contextShapeChanged) { updateContextRoots(); paintBackdrop(rightBackdrop,rightBounds,rightOpacity,rightBlur,'16px','round',rightGlass); }
     const components = [...document.querySelectorAll(componentSelector)];
     for (const el of componentTouched) if (!components.includes(el)) { el.removeAttribute('data-sao-component'); componentTouched.delete(el); }
     for (const el of components) { if (!el.hasAttribute('data-sao-component')) el.setAttribute('data-sao-component',''); componentTouched.add(el); }
@@ -350,6 +413,8 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
   observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','open','data-state','role','style','class']});
   const onStorage = event => { if (event.key === KEY) { try { preferences = normalize(JSON.parse(event.newValue || '{}')); applyTokens(); sync(); notify(); } catch {} } };
   window.addEventListener('storage', onStorage);
+  const onContextScroll = event => { if (event.target instanceof Element && (event.target.closest(contextRootSelector) || [...contextTouched].some(root => event.target.contains(root)))) schedule(); };
+  document.addEventListener('scroll',onContextScroll,{capture:true,passive:true});
   const onVisibility = () => { if (document.hidden) { cancelAnimationFrame(queued); queued = 0; } else schedule(); };
   document.addEventListener('visibilitychange', onVisibility);
   function readThemePreference() { const value = ctx.theme.getTheme?.()?.preference; return ['system','light','dark'].includes(value) ? value : preferences.theme; }
@@ -465,7 +530,7 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
   applyTokens(); sync(); loadCustom();
   function dispose() {
     if (disposed) return; disposed = true; uploadRevision++;
-    cancelAnimationFrame(queued); observer.disconnect(); resizeObserver?.disconnect(); window.removeEventListener('storage',onStorage); document.removeEventListener('visibilitychange',onVisibility);
+    cancelAnimationFrame(queued); observer.disconnect(); resizeObserver?.disconnect(); contextCardsObserved.clear(); contextViewportsObserved.clear(); document.removeEventListener('scroll',onContextScroll,true); window.removeEventListener('storage',onStorage); document.removeEventListener('visibilitychange',onVisibility);
     themeTransition?.skipTransition?.(); themeAnimation?.cancel(); themeTransitionStyle?.remove();
     frameHost?.removeAttribute('data-sao-wall-frame'); frameHost?.removeAttribute('data-sao-wall-positioned');
     for (const el of layoutTouched) { el.removeAttribute('data-sao-wall-column'); el.removeAttribute('data-sao-wall-right'); } layoutTouched.clear();

@@ -242,7 +242,7 @@ function mountSAOSettings(container, api) {
       ${range('rightBlur', '右栏背景模糊', 0, 24, 'px')}
     </div>
     <fieldset>${fieldLegend('contextGlass', '上下文界面')}<p class="sao-hint">仅作用于右栏上下文卡片。每种材质单独记忆；液态初始透明度 20%、模糊 0px，磨砂初始透明度 35%。</p>
-      <div class="sao-choices">${choice('contextGlass', 'follow', '跟随右栏', '')}${choice('contextGlass', 'frosted', '磨砂玻璃', '')}${choice('contextGlass', 'liquid', '液态玻璃', '')}${choice('contextGlass', 'off', '原始外观', '')}</div>
+      <div class="sao-choices sao-compact-choices">${choice('contextGlass', 'follow', '跟随右栏', '')}${choice('contextGlass', 'frosted', '磨砂玻璃', '')}${choice('contextGlass', 'liquid', '液态玻璃', '')}${choice('contextGlass', 'off', '原始外观', '')}</div>
       ${range('contextOpacity', '上下文透明度', 0, 100, '%')}
       ${range('contextBlur', '上下文背景模糊', 0, 24, 'px')}
     </fieldset>
