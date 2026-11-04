@@ -79,8 +79,6 @@ github:GXinnnnnn/dsh-SAO#main&path:/market
 
 ![上下文磨砂玻璃：35%透明度的柔和扩散](assets/screenshots/context-frosted.png)
 
-![透明度设置：窗口、输入框、内容组件和会话背景独立调节](assets/screenshots/settings-transparency.png)
-
 *全局窗口、输入框、内容组件与会话背景分别调节。*
 
 ## 壁纸
