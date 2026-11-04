@@ -2,7 +2,7 @@
 
 刀剑神域风格 DSH 皮肤，提供双 Link Start 启动动画与角色语音、独立透明度、连续右栏液态玻璃与上下文叠层、主题配色、自定义壁纸和模型强度调节。
 
-![右栏实拍：连续液态底层、上下文卡片与平直接缝](assets/screenshots/workspace.png)
+<img width="1920" height="1032" alt="微信图片_20261104150703_696_3" src="https://github.com/user-attachments/assets/5fd3b10c-8f30-4e06-89d2-9929df514715" />
 
 *当前工作区右栏局部实拍；会话区域已遮蔽。*
 
@@ -31,6 +31,8 @@ github:GXinnnnnn/dsh-SAO#main&path:/market
 - 可开关自动播放和声音，调整音量，也可手动预览。
 - 按 **Esc** 或点击“跳过”结束本次播放。
 - 浏览器限制自动声音时，点击提示即可有声播放；减少动态效果模式下使用静态无声开场。
+<img width="1921" height="1234" alt="image" src="https://github.com/user-attachments/assets/65b561f7-31f0-4e85-9715-f105c3d787cc" />
+<img width="3840" height="2088" alt="image" src="https://github.com/user-attachments/assets/52f45081-a566-4a78-8a02-4df27a57b146" />
 
 ## 外观与配色
 
@@ -74,8 +76,6 @@ github:GXinnnnnn/dsh-SAO#main&path:/market
 右栏顶栏有独立的“跟随会话顶栏”开关，与右栏背景联动分别控制。
 
 ![上下文设置：液态20%、右栏30%，分别调节](assets/screenshots/settings-context.png)
-
-![上下文液态玻璃：清晰透光与边缘高光](assets/screenshots/context-liquid.png)
 
 ![上下文磨砂玻璃：35%透明度的柔和扩散](assets/screenshots/context-frosted.png)
 
