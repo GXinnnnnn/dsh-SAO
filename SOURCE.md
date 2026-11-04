@@ -12,7 +12,7 @@ Appearance defaults are accent `#8CC8F4` and wallpaper `builtin-3` (SAO · 03). 
 
 Liquid glass uses stronger wallpaper refraction and edge highlights; frosted glass uses diffuse blur. Right-sidebar tabs, including Context, Files, Changes, Task Manager, side chat and Diagnostics, share the selected material across their full content surface. The Browser tab keeps its original appearance. The right scene follows the conversation by default; independent material profiles start at 30% transparency / 0px blur for liquid and 50% / 0px for frosted. Each material remembers its own transparency and blur, and per-setting reset restores that material's initial value.
 
-An open right sidebar docked beside the conversation joins along a flat inner edge without a dividing line or doubled corners; the outer rounded frame and edge highlights remain. Browser, floating and fullscreen panes retain their own frames.
+An open right sidebar docked beside the conversation joins along a flat inner edge without a dividing line or doubled corners. The right-scene upper-right corner stays square in docked and fullscreen layouts to align with the native frame; the remaining outer rounding and edge highlights are preserved. Browser, floating and fullscreen panes retain their own frames.
 
 Right-sidebar context cards follow the right material by default and can independently select liquid, frosted or original appearance. The four choices use compact 40px-high, single-line controls that wrap in narrow panels. Their own material profiles start at 20% transparency / 0px blur for liquid and 35% / 0px for frosted, with separate memory and per-setting reset.
 
