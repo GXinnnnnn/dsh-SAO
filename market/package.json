@@ -3,7 +3,7 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "dsh-SAO：双启动动画与角色语音、主题配色、液态与磨砂玻璃、自定义壁纸及模型强度调节。",
+  "description": "SAO风格DSH皮肤：双启动动画与角色语音、独立透明度、连续右栏液态玻璃与上下文叠层、自定义壁纸及模型强度调节",
   "author": "GXinnnnnn",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {

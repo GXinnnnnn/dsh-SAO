@@ -32,7 +32,7 @@
 function createSAOLiquidGlass() {
   'use strict';
   const win = window, doc = win.document;
-  const hosts = new Map(), surfaceOpacities = new Map(), surfaceBackgrounds = new Map(), edgeOnlySurfaces = new Set(), listeners = [];
+  const hosts = new Map(), surfaceOpacities = new Map(), surfaceBackgrounds = new Map(), edgeOnlySurfaces = new Set(), surfaceOpenEdges = new Map(), listeners = [];
   const clamp = (value, low, high, fallback) => {
     const n = Number(value);
     return Number.isFinite(n) ? Math.min(high, Math.max(low, n)) : fallback;
@@ -65,6 +65,7 @@ function createSAOLiquidGlass() {
   uniform vec4 radiiY;
   uniform vec2 pixelSize;
   uniform vec2 bevel;
+  uniform vec2 openEdges;
   uniform float opacity;
    uniform float edgeOnly;
   uniform float wallOpacity;
@@ -85,15 +86,19 @@ function createSAOLiquidGlass() {
     vec2 local = p + size * 0.5;
     // CSS permits a corner radius larger than half a side. Select its actual
     // corner region rather than a quadrant through the rectangle's center.
-    if (local.x < radiiX.x && local.y < radiiY.x)
+    if (openEdges.x < 0.5 && local.x < radiiX.x && local.y < radiiY.x)
       return ellipseDistance(local - vec2(radiiX.x, radiiY.x), vec2(radiiX.x, radiiY.x));
-    if (local.x > size.x - radiiX.y && local.y < radiiY.y)
+    if (openEdges.y < 0.5 && local.x > size.x - radiiX.y && local.y < radiiY.y)
       return ellipseDistance(local - vec2(size.x - radiiX.y, radiiY.y), vec2(radiiX.y, radiiY.y));
-    if (local.x > size.x - radiiX.z && local.y > size.y - radiiY.z)
+    if (openEdges.y < 0.5 && local.x > size.x - radiiX.z && local.y > size.y - radiiY.z)
       return ellipseDistance(local - size + vec2(radiiX.z, radiiY.z), vec2(radiiX.z, radiiY.z));
-    if (local.x < radiiX.w && local.y > size.y - radiiY.w)
+    if (openEdges.x < 0.5 && local.x < radiiX.w && local.y > size.y - radiiY.w)
       return ellipseDistance(local - vec2(radiiX.w, size.y - radiiY.w), vec2(radiiX.w, radiiY.w));
-    vec2 q = abs(p) - size * 0.5;
+    // The shared frame has no internal side wall. Its distance/normal field
+    // therefore keeps top/bottom optics without inventing a vertical bevel.
+    float left = mix(-local.x, -1.0e6, openEdges.x);
+    float right = mix(local.x - size.x, -1.0e6, openEdges.y);
+    vec2 q = vec2(max(left, right), max(-local.y, local.y - size.y));
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
   }
   vec3 sampleScene(vec2 screen) {
@@ -263,7 +268,7 @@ function createSAOLiquidGlass() {
       texture = gl.createTexture();
       if (!vao || !texture) throw new Error('Liquid resources unavailable');
       gl.bindVertexArray(vao);
-      for (const name of ['wallpaper', 'size', 'origin', 'photo', 'radiiX', 'radiiY', 'pixelSize', 'bevel', 'opacity', 'edgeOnly', 'wallOpacity', 'dark', 'sceneOpacity', 'sceneColor', 'sceneBounds', 'proxyColor']) {
+      for (const name of ['wallpaper', 'size', 'origin', 'photo', 'radiiX', 'radiiY', 'pixelSize', 'bevel', 'openEdges', 'opacity', 'edgeOnly', 'wallOpacity', 'dark', 'sceneOpacity', 'sceneColor', 'sceneBounds', 'proxyColor']) {
         uniforms[name] = gl.getUniformLocation(program, name);
       }
       gl.activeTexture(gl.TEXTURE0);
@@ -374,6 +379,7 @@ function createSAOLiquidGlass() {
     surfaceOpacities.delete(host);
     surfaceBackgrounds.delete(host);
     edgeOnlySurfaces.delete(host);
+    surfaceOpenEdges.delete(host);
   }
   function prune() {
     for (const host of hosts.keys()) if (!host.isConnected) remove(host);
@@ -439,7 +445,7 @@ function createSAOLiquidGlass() {
         rect.height / Math.max(1, corners[1][1] + corners[2][1]),
         rect.width / Math.max(1, corners[2][0] + corners[3][0]),
         rect.height / Math.max(1, corners[3][1] + corners[0][1]));
-      rows.push({ entry, rect, surfaceOpacity, edgeOnly: Number(edgeOnlySurfaces.has(host)), background: surfaceBackgrounds.get(host),
+      rows.push({ entry, rect, openEdges: surfaceOpenEdges.get(host) || [0,0], surfaceOpacity, edgeOnly: Number(edgeOnlySurfaces.has(host)), background: surfaceBackgrounds.get(host),
         corners: corners.map(pair => pair.map(n => n * fit)) });
     }
     for (const entry of toHide) if (!entry.canvas.hidden) entry.canvas.hidden = true;
@@ -458,7 +464,7 @@ function createSAOLiquidGlass() {
       const top = area.y + area.height / 2 + ((area.height - baseHeight) * position.y / 100 - area.height / 2) * zoom;
       const pending = [], proxyColor = baseColor || backgroundColor(dark);
       for (const row of rows) {
-        const { entry, rect, corners, surfaceOpacity, edgeOnly, background } = row;
+        const { entry, rect, corners, openEdges, surfaceOpacity, edgeOnly, background } = row;
         const sceneOpacity = background?.opacity ?? 0;
         const sceneColor = background?.color || proxyColor;
         const sceneBounds = background?.bounds || [0, 0, 0, 0];
@@ -469,7 +475,7 @@ function createSAOLiquidGlass() {
         // These are every input affecting the rendered pixels. Chat scrolling
         // or an identical update need not redraw/copy a stationary surface.
         const key = [textureVersion, dark, wallOpacity, left, top, photoWidth, photoHeight,
-          surfaceOpacity, edgeOnly, ...proxyColor, sceneOpacity, ...sceneColor, ...sceneBounds,
+          surfaceOpacity, edgeOnly, ...openEdges, ...proxyColor, sceneOpacity, ...sceneColor, ...sceneBounds,
           rect.left, rect.top, rect.width, rect.height, width, height, ...corners.flat()];
         if (entry.canvas.width === width && entry.canvas.height === height && entry.renderKey &&
             key.every((value, index) => value === entry.renderKey[index])) continue;
@@ -484,10 +490,11 @@ function createSAOLiquidGlass() {
       gl.uniform1f(uniforms.wallOpacity, wallOpacity);
       gl.uniform1f(uniforms.dark, Number(dark));
       gl.uniform3f(uniforms.proxyColor, ...proxyColor);
-      for (const { entry, rect, corners, surfaceOpacity, edgeOnly, width, height, key,
+      for (const { entry, rect, corners, openEdges, surfaceOpacity, edgeOnly, width, height, key,
         sceneOpacity, sceneColor, sceneBounds } of pending) {
         gl.uniform1f(uniforms.opacity, surfaceOpacity);
         gl.uniform1f(uniforms.edgeOnly, edgeOnly);
+        gl.uniform2f(uniforms.openEdges, ...openEdges);
         gl.uniform1f(uniforms.sceneOpacity, sceneOpacity);
         gl.uniform3f(uniforms.sceneColor, ...sceneColor);
         gl.uniform4f(uniforms.sceneBounds, ...sceneBounds);
@@ -604,6 +611,10 @@ function createSAOLiquidGlass() {
     }
     edgeOnlySurfaces.clear();
     if (options.edgeOnlySurfaces instanceof Set) for (const host of options.edgeOnlySurfaces) if (hosts.has(host)) edgeOnlySurfaces.add(host);
+    surfaceOpenEdges.clear();
+    if (options.surfaceOpenEdges instanceof Map) for (const [host, sides] of options.surfaceOpenEdges) {
+      if (hosts.has(host) && sides) surfaceOpenEdges.set(host,[Number(sides.left === true),Number(sides.right === true)]);
+    }
     // Background overlays are optional per-update snapshots, like opacity maps.
     // Invalid bounds cannot apply an accidental viewport-wide mask.
     surfaceBackgrounds.clear();
@@ -655,6 +666,7 @@ function createSAOLiquidGlass() {
     surfaceOpacities.clear();
     surfaceBackgrounds.clear();
     edgeOnlySurfaces.clear();
+    surfaceOpenEdges.clear();
     releaseGPU();
     if (gl && !lost) gl.getExtension('WEBGL_lose_context')?.loseContext();
     if (shared) shared.width = shared.height = 1;
