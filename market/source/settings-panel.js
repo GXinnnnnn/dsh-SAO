@@ -3,7 +3,7 @@ function mountSAOSettings(container, api) {
   'use strict';
   const doc = container.ownerDocument;
   const uid = 'sao-settings-' + Math.random().toString(36).slice(2, 10);
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: null, surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.40, headerOpacity: 0.40, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.50, rightBlur: 0, headerLinked: true, rightHeaderOpacity: 0.40, wallpaper: 'none', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
+  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.40, headerOpacity: 0.40, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.40, wallpaper: 'builtin-3', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
   let prefs = Object.assign({}, defaults, api.get());
   let disposed = false, unsubscribe = null, pending = 0, operation = 0;
   let hue = 0, saturation = 0.8, brightness = 1, colorExpanded = false, hexDirty = false;
@@ -32,7 +32,7 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-tab[aria-selected=true]{color:var(--sao-ink);background:var(--sao-soft);border-color:var(--sao-selected-line)}
 [data-sao-settings] .sao-tab[aria-selected=true]::after{content:"";position:absolute;bottom:3px;left:calc(50% - 2px);width:4px;height:4px;border-radius:50%;background:var(--sao-mark)}
 [data-sao-settings] .sao-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,260px);gap:28px;align-items:start}
-[data-sao-settings] .sao-main{min-width:0}
+[data-sao-settings] .sao-main{min-width:0;container-type:inline-size;container-name:sao-settings-main}
 [data-sao-settings] .sao-section-head{margin-bottom:20px}
 [data-sao-settings] h3{font-size:16px;font-weight:500}
 [data-sao-settings] .sao-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px;padding:15px 0;border-bottom:1px solid var(--sao-line)}
@@ -83,9 +83,11 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-font-row input{flex:1 1 180px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:var(--sao-surface)}
 [data-sao-settings] .sao-theme-choices{grid-template-columns:repeat(3,minmax(0,1fr))}
 [data-sao-settings] .sao-theme-choices .sao-choice > span{min-height:48px}
-[data-sao-settings] .sao-range-row{margin-top:18px}
-[data-sao-settings] .sao-range-title{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin-bottom:6px;font-weight:400;font-size:13px}
-[data-sao-settings] .sao-range-title > label{flex:1 1 110px;min-width:0}
+[data-sao-settings] .sao-range-row{display:grid;grid-template-columns:minmax(0,9em) minmax(80px,1fr) 4ch max-content;grid-template-areas:"label slider value reset";align-items:center;gap:0 10px;margin-top:8px;padding:4px 10px;border:1px solid var(--sao-line);border-radius:8px;background:var(--sao-surface)}
+[data-sao-settings] .sao-range-row > label{grid-area:label;min-width:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+[data-sao-settings] .sao-range-row > input[type=range]{grid-area:slider;min-width:0;min-height:44px}
+[data-sao-settings] .sao-range-row > output{grid-area:value;justify-self:end;text-align:right;font-variant-numeric:tabular-nums}
+[data-sao-settings] .sao-range-row > .sao-reset{grid-area:reset;min-height:44px;margin-inline-start:0;border-radius:6px}
 [data-sao-settings] output{font:12px ui-monospace,monospace;color:var(--sao-muted);white-space:nowrap}
 [data-sao-settings] input[type=range]{width:100%;min-height:32px;accent-color:var(--sao-accent);cursor:pointer;margin:0}
 [data-sao-settings] input[type=range][data-pref]{appearance:none;background:transparent}
@@ -93,7 +95,6 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] input[type=range][data-pref]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;margin-top:-7px;border:3px solid var(--sao-base);border-radius:50%;background:var(--sao-mark);box-shadow:0 0 0 1px var(--sao-mark-edge)}
 [data-sao-settings] input[type=range][data-pref]::-moz-range-track{height:6px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:linear-gradient(to right,var(--sao-track) var(--range-progress,0%),var(--sao-line) var(--range-progress,0%))}
 [data-sao-settings] input[type=range][data-pref]::-moz-range-thumb{width:14px;height:14px;border:3px solid var(--sao-base);border-radius:50%;background:var(--sao-mark);box-shadow:0 0 0 1px var(--sao-mark-edge)}
-[data-sao-settings] .sao-range-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--sao-muted)}
 [data-sao-settings] .sao-swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 [data-sao-settings] .sao-swatch{position:relative;display:inline-flex;min-width:44px;min-height:44px;justify-content:center;align-items:center;cursor:pointer}
 [data-sao-settings] .sao-swatch input{position:absolute;opacity:0;width:38px;height:38px;margin:0;cursor:pointer}
@@ -165,6 +166,7 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-footer .sao-btn{font-weight:400;font-size:12px;flex-shrink:0}
 @container sao-settings (max-width:700px){[data-sao-settings] .sao-layout{grid-template-columns:minmax(0,1fr)}[data-sao-settings] .sao-preview{max-width:none}[data-sao-settings] .sao-scene{height:180px}[data-sao-settings] .sao-mini{max-width:230px}}
 @container sao-settings (max-width:400px){[data-sao-settings] .sao-theme-choices{grid-template-columns:minmax(0,1fr)}}
+@container sao-settings-main (max-width:480px){[data-sao-settings] .sao-range-row{grid-template-columns:minmax(0,1fr) 4ch max-content;grid-template-areas:"label label reset" "slider slider value";column-gap:8px}}
 [data-sao-settings]{container-type:inline-size;container-name:sao-settings}
 @media(max-width:720px){[data-sao-settings]{padding:18px 16px}[data-sao-settings] .sao-layout{grid-template-columns:minmax(0,1fr);gap:24px}[data-sao-settings] .sao-scene{height:180px}[data-sao-settings] .sao-tab{flex:1;padding-inline:10px}[data-sao-settings] .sao-head{margin-bottom:16px}}
 @media(prefers-reduced-motion:reduce){[data-sao-settings] *,[data-sao-settings] *::before,[data-sao-settings] *::after{transition:none!important;animation:none!important}}
@@ -184,8 +186,8 @@ function mountSAOSettings(container, api) {
   function fieldLegend(name, label) {
     return `<legend><span class="sao-field-head"><span>${label}</span>${resetSetting(name, label)}</span></legend>`;
   }
-  function range(name, label, min, max, unit, ends) {
-    return `<div class="sao-range-row"><div class="sao-range-title"><label for="${id(name)}">${label}</label><output for="${id(name)}" data-output="${name}" data-unit="${unit}"></output>${resetSetting(name, label)}</div><input id="${id(name)}" data-pref="${name}" type="range" min="${min}" max="${max}" step="1" aria-describedby="${id(name)}-help"><div class="sao-range-ends" id="${id(name)}-help"><span>${ends[0]}</span><span>${ends[1]}</span></div></div>`;
+  function range(name, label, min, max, unit) {
+    return `<div class="sao-range-row"><label for="${id(name)}">${label}</label><input id="${id(name)}" data-pref="${name}" type="range" min="${min}" max="${max}" step="1"><output for="${id(name)}" data-output="${name}" data-unit="${unit}"></output>${resetSetting(name, label)}</div>`;
   }
   function toggle(name, label, hint) {
     return `<div class="sao-row"><div class="sao-row-copy"><label class="sao-row-title" for="${id(name)}">${label}</label><span class="sao-hint" id="${id(name)}-help">${hint}</span></div><div class="sao-row-controls"><label class="sao-switch"><input id="${id(name)}" type="checkbox" data-pref="${name}" aria-describedby="${id(name)}-help"><span class="sao-switch-track" aria-hidden="true"></span></label>${resetSetting(name, label)}</div></div>`;
@@ -207,7 +209,7 @@ function mountSAOSettings(container, api) {
   <fieldset>${fieldLegend('animation', '动画样式')}<div class="sao-choices sao-animation-choices">${choice('animation', '1', '动画 1', '还原光束')}${choice('animation', '2', '动画 2', '纤细光束')}</div></fieldset>
   <fieldset>${fieldLegend('voice', 'Link Start 语音')}<div class="sao-choices sao-compact-choices">${choice('voice', 'kirito', '桐人', '')}${choice('voice', 'asuna', '亚丝娜', '')}</div></fieldset>
   ${toggle('sound', '播放声音', '启动音效与角色语音。')}
-  ${range('volume', '音量', 0, 100, '%', ['静音', '100%'])}
+  ${range('volume', '音量', 0, 100, '%')}
   <div class="sao-actions"><button class="sao-btn sao-btn-primary" data-action="preview" type="button">预览启动动画</button></div>
 </section>
 <section role="tabpanel" id="${id('panel-appearance')}" aria-labelledby="${id('tab-appearance')}" data-panel="appearance" hidden>
@@ -222,25 +224,30 @@ function mountSAOSettings(container, api) {
     </div>
   </fieldset>
   <fieldset data-surface-colors>${fieldLegend('surfaceColor', '界面底色')}<div class="sao-swatches" data-surface-swatches role="radiogroup" aria-label="界面底色预设"></div><p class="sao-current-color" data-surface-label></p><div data-surface-picker></div></fieldset>
-  ${range('windowOpacity', '全局窗口透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
-  ${range('composerOpacity', '输入框背景透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
-  ${range('componentOpacity', '内容组件背景透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
+  ${range('windowOpacity', '全局窗口透明度', 0, 100, '%')}
+  ${range('composerOpacity', '输入框透明度', 0, 100, '%')}
+  ${range('componentOpacity', '内容组件透明度', 0, 100, '%')}
   <fieldset aria-describedby="${id('conversation-help')}"><legend>会话背景</legend><p class="sao-hint" id="${id('conversation-help')}">整面背景遮罩，独立于局部玻璃。右栏默认同步此处的透明度与模糊。</p>
-    ${range('conversationOpacity', '会话背景遮罩透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
-    ${range('conversationBlur', '会话背景模糊', 0, 24, 'px', ['0px · 无模糊', '24px'])}
+    ${range('conversationOpacity', '会话背景透明度', 0, 100, '%')}
+    ${range('conversationBlur', '会话背景模糊', 0, 24, 'px')}
   </fieldset>
   <fieldset>${fieldLegend('glass', '会话玻璃效果')}<div class="sao-choices sao-glass-choices">${choice('glass', 'off', '关闭', '清晰原色')}${choice('glass', 'frosted', '磨砂玻璃', '柔和模糊')}${choice('glass', 'liquid', '液态玻璃', '通透折光')}</div></fieldset>
-  ${range('opacity', '表面透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
-  ${range('headerOpacity', '会话顶栏透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
+  ${range('opacity', '表面透明度', 0, 100, '%')}
+  ${range('headerOpacity', '会话顶栏透明度', 0, 100, '%')}
   <div class="sao-right-settings">
-    ${toggle('rightLinked', '右栏跟随会话', '同步会话的整面背景透明度、模糊和玻璃效果；关闭后可独立调节。')}
+    ${toggle('rightLinked', '右栏跟随会话', '同步会话的整面背景透明度、模糊和玻璃效果；关闭后按材质记忆独立参数。')}
     <div data-right-controls hidden>
       <fieldset>${fieldLegend('rightGlass', '右栏玻璃效果')}<div class="sao-choices sao-glass-choices">${choice('rightGlass', 'off', '关闭', '清晰原色')}${choice('rightGlass', 'frosted', '磨砂玻璃', '柔和模糊')}${choice('rightGlass', 'liquid', '液态玻璃', '通透折光')}</div></fieldset>
-      ${range('rightOpacity', '右栏背景遮罩透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
-      ${range('rightBlur', '右栏背景模糊', 0, 24, 'px', ['0px · 无模糊', '24px'])}
+      ${range('rightOpacity', '右栏背景透明度', 0, 100, '%')}
+      ${range('rightBlur', '右栏背景模糊', 0, 24, 'px')}
     </div>
+    <fieldset>${fieldLegend('contextGlass', '上下文界面')}<p class="sao-hint">仅作用于右栏上下文卡片。每种材质单独记忆；液态初始透明度 20%、模糊 0px，磨砂初始透明度 35%。</p>
+      <div class="sao-choices">${choice('contextGlass', 'follow', '跟随右栏', '')}${choice('contextGlass', 'frosted', '磨砂玻璃', '')}${choice('contextGlass', 'liquid', '液态玻璃', '')}${choice('contextGlass', 'off', '原始外观', '')}</div>
+      ${range('contextOpacity', '上下文透明度', 0, 100, '%')}
+      ${range('contextBlur', '上下文背景模糊', 0, 24, 'px')}
+    </fieldset>
     ${toggle('headerLinked', '右栏顶栏跟随会话顶栏', '关闭后可单独设置右栏顶栏透明度。')}
-    ${range('rightHeaderOpacity', '右栏顶栏透明度', 0, 100, '%', ['0% · 完全不透明', '100% · 完全透明'])}
+    ${range('rightHeaderOpacity', '右栏顶栏透明度', 0, 100, '%')}
   </div>
 </section>
 <section role="tabpanel" id="${id('panel-wallpaper')}" aria-labelledby="${id('tab-wallpaper')}" data-panel="wallpaper" hidden>
@@ -248,10 +255,10 @@ function mountSAOSettings(container, api) {
   <fieldset class="sao-wall">${fieldLegend('wallpaper', '壁纸')}<div class="sao-wall-grid" data-wall-grid></div></fieldset>
   <div class="sao-upload"><label for="${id('upload')}">上传自定义壁纸</label><input id="${id('upload')}" type="file" accept="image/*" aria-describedby="${id('upload-help')}"><p class="sao-hint" id="${id('upload-help')}">选择图片后自动保存并应用，建议使用横向图片。</p><button class="sao-btn" data-action="remove-upload" type="button" hidden>删除自定义壁纸</button></div>
   <div class="sao-fit"><span>适应方式</span><span>填充 · 默认</span></div>
-  ${range('wallOpacity', '背景清晰度 / 不透明度', 0, 100, '%', ['0% · 完全透明', '100% · 完全显示'])}
-  ${range('wallX', '水平位置', 0, 100, '%', ['左', '右'])}
-  ${range('wallY', '垂直位置', 0, 100, '%', ['上', '下'])}
-  ${range('wallScale', '画面大小', 100, 250, '%', ['100%', '250%'])}
+  ${range('wallOpacity', '壁纸不透明度', 0, 100, '%')}
+  ${range('wallX', '水平位置', 0, 100, '%')}
+  ${range('wallY', '垂直位置', 0, 100, '%')}
+  ${range('wallScale', '画面大小', 100, 250, '%')}
   <div class="sao-actions"><button class="sao-btn" type="button" data-action="reset-transform">重置位置与大小</button></div>
 </section>
 </div><aside class="sao-preview" aria-label="外观实时预览"><div class="sao-preview-label"><span>效果预览</span><span class="sao-live">实时</span></div><div class="sao-scene"><div class="sao-scene-wall" aria-hidden="true"><img alt="" hidden></div><div class="sao-scene-conversation" aria-hidden="true"></div><div class="sao-mini" data-glass="off"><div class="sao-mini-title"><span class="sao-mini-mark" aria-hidden="true"></span><span>Link Start</span></div><div class="sao-mini-component" role="img" aria-label="内容组件背景预览"><div class="sao-mini-line"></div><div class="sao-mini-line"></div></div><div class="sao-mini-composer">输入消息…</div></div></div><div class="sao-preview-meta"><span data-preview-glass></span><span data-preview-opacity></span><span data-preview-wall></span><span data-preview-wall-opacity></span></div><p class="sao-preview-note">所有设置即时生效。</p></aside></div>
@@ -278,7 +285,7 @@ function mountSAOSettings(container, api) {
   for (const [value, name] of presetColors) {
     const label = doc.createElement('label');
     label.className = 'sao-swatch' + (value === null ? ' sao-follow' : '');
-    label.title = value === null ? '默认 · 跟随 DSH 主题' : name + ' ' + value;
+    label.title = value === null ? '跟随 DSH 主题' : name + ' ' + value;
     const input = doc.createElement('input');
     input.type = 'radio'; input.name = id('accent'); input.value = value || 'default';
     input.setAttribute('aria-label', label.title);
@@ -449,7 +456,7 @@ function mountSAOSettings(container, api) {
       const light = rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
       root.style.setProperty('--sao-on-accent', light > .179 ? '#000000' : '#FFFFFF');
     } else root.style.removeProperty('--sao-on-accent');
-    find('[data-color-label]').textContent = custom ? '当前主题色 ' + custom : '默认 · 跟随 DSH 主题色';
+    find('[data-color-label]').textContent = custom ? '当前主题色 ' + custom : '跟随 DSH 主题色';
     if (accent && accent !== latestColor) {
       latestColor = accent; hsvFromHex(accent);
       if (!hexDirty && doc.activeElement !== hex) hex.value = accent;
@@ -464,15 +471,28 @@ function mountSAOSettings(container, api) {
       const value = key === 'rightHeaderOpacity' && prefs.headerLinked ? prefs.headerOpacity : prefs[key];
       if (input.type === 'checkbox') input.checked = !!value;
       else if (input.type === 'radio') input.checked = String(value) === input.value;
-      else if (key !== 'fontFamily' || doc.activeElement !== input) input.value = String(key === 'opacity' || key === 'rightOpacity' || key === 'windowOpacity' || key === 'composerOpacity' || key === 'componentOpacity' || key === 'headerOpacity' || key === 'rightHeaderOpacity' || key === 'conversationOpacity' ? Math.round((1 - Number(value)) * 100) : key === 'volume' || key === 'wallOpacity' ? Math.round(Number(value) * 100) : value);
+      else if (key !== 'fontFamily' || doc.activeElement !== input) input.value = String(key === 'opacity' || key === 'rightOpacity' || key === 'contextOpacity' || key === 'windowOpacity' || key === 'composerOpacity' || key === 'componentOpacity' || key === 'headerOpacity' || key === 'rightHeaderOpacity' || key === 'conversationOpacity' ? Math.round((1 - Number(value)) * 100) : key === 'volume' || key === 'wallOpacity' ? Math.round(Number(value) * 100) : value);
       if (input.type === 'range') input.style.setProperty('--range-progress', ((Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min)) * 100) + '%');
     }
     for (const output of all('[data-output]')) {
       const key = output.dataset.output;
       const value = key === 'rightHeaderOpacity' && prefs.headerLinked ? prefs.headerOpacity : prefs[key];
-      output.textContent = (key === 'opacity' || key === 'rightOpacity' || key === 'windowOpacity' || key === 'composerOpacity' || key === 'componentOpacity' || key === 'headerOpacity' || key === 'rightHeaderOpacity' || key === 'conversationOpacity' ? Math.round((1 - Number(value)) * 100) : key === 'volume' || key === 'wallOpacity' ? Math.round(value * 100) : value) + (output.dataset.unit || '%');
+      output.textContent = (key === 'opacity' || key === 'rightOpacity' || key === 'contextOpacity' || key === 'windowOpacity' || key === 'composerOpacity' || key === 'componentOpacity' || key === 'headerOpacity' || key === 'rightHeaderOpacity' || key === 'conversationOpacity' ? Math.round((1 - Number(value)) * 100) : key === 'volume' || key === 'wallOpacity' ? Math.round(value * 100) : value) + (output.dataset.unit || '%');
     }
     find('[data-right-controls]').hidden = !!prefs.rightLinked;
+    const materialNames = {off: '无玻璃', frosted: '磨砂玻璃', liquid: '液态玻璃'};
+    const rightMaterial = materialNames[prefs.rightGlass] || '液态玻璃';
+    const contextMode = prefs.contextGlass === 'follow' ? (prefs.rightLinked ? prefs.glass : prefs.rightGlass) : prefs.contextGlass;
+    const contextMaterial = materialNames[contextMode] || '液态玻璃';
+    for (const key of ['rightOpacity', 'rightBlur', 'contextOpacity', 'contextBlur']) {
+      const initial = typeof api.getDefault === 'function' ? api.getDefault(key) : key === 'rightOpacity' ? prefs.rightGlass === 'liquid' ? .70 : .50 : key === 'contextOpacity' ? contextMode === 'frosted' ? .65 : .80 : 0;
+      const value = key.endsWith('Opacity') ? Math.round((1 - initial) * 100) + '%' : initial + 'px';
+      const label = key === 'contextOpacity' ? '上下文透明度' : key === 'contextBlur' ? '上下文背景模糊' : key === 'rightOpacity' ? '右栏背景透明度' : '右栏背景模糊';
+      const reset = find('[data-reset-setting="' + key + '"]');
+      const material = key.startsWith('context') ? contextMaterial : rightMaterial;
+      reset.title = '恢复' + material + '默认：' + value;
+      reset.setAttribute('aria-label', '恢复' + material + label + '默认（' + value + '）');
+    }
     const rightHeader = find('[data-pref="rightHeaderOpacity"]');
     rightHeader.disabled = !!prefs.headerLinked; rightHeader.setAttribute('aria-disabled', String(!!prefs.headerLinked));
     const volume = find('[data-pref="volume"]');
@@ -545,7 +565,7 @@ function mountSAOSettings(container, api) {
         });
         return;
       }
-      const value = input.type === 'checkbox' ? input.checked : input.type === 'range' ? key === 'opacity' || key === 'rightOpacity' || key === 'windowOpacity' || key === 'composerOpacity' || key === 'componentOpacity' || key === 'headerOpacity' || key === 'rightHeaderOpacity' || key === 'conversationOpacity' ? 1 - Number(input.value) / 100 : Number(input.value) / (key === 'volume' || key === 'wallOpacity' ? 100 : 1) : key === 'fontFamily' ? input.value.trim() || defaults.fontFamily : input.value;
+      const value = input.type === 'checkbox' ? input.checked : input.type === 'range' ? key === 'opacity' || key === 'rightOpacity' || key === 'contextOpacity' || key === 'windowOpacity' || key === 'composerOpacity' || key === 'componentOpacity' || key === 'headerOpacity' || key === 'rightHeaderOpacity' || key === 'conversationOpacity' ? 1 - Number(input.value) / 100 : Number(input.value) / (key === 'volume' || key === 'wallOpacity' ? 100 : 1) : key === 'fontFamily' ? input.value.trim() || defaults.fontFamily : input.value;
       if (key === 'fontFamily') fontInput.value = value;
       apply({ [key]: value });
     });

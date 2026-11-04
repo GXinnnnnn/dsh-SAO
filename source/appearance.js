@@ -7,22 +7,64 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   // Retire DOM left by versions that did not expose a disposable controller.
   for (const el of document.querySelectorAll('style[data-sao-appearance],[data-sao-wallpaper],[data-sao-liquid]')) el.remove();
   const materialAttributes = ['data-sao-material','data-sao-positioned','data-sao-surface','data-sao-zone','data-sao-core-surface'];
+  for (const el of document.querySelectorAll('[data-sao-context]')) el.removeAttribute('data-sao-context');
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
   const KEY = 'dsh-sao.preferences.v4';
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: null, surfaceColor: null, glass: 'liquid', opacity: .40, liquidOpacity: .40, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .50, rightBlur: 0, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .40, rightHeaderOpacity: .40, headerLinked: true, wallpaper: 'none', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
+  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .40, liquidOpacity: .40, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .40, rightHeaderOpacity: .40, headerLinked: true, wallpaper: 'builtin-3', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
   const bounded = (v, fallback, min, max) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
+  const rightSceneModes = ['off','frosted','liquid'];
+  const rightSceneDefaults = mode => ({opacity: mode === 'liquid' ? .70 : .50, blur: 0});
+  const contextMode = p => p.contextGlass === 'follow' ? (p.rightLinked ? p.glass : p.rightGlass) : p.contextGlass;
+  const contextSceneDefaults = mode => ({opacity: mode === 'frosted' ? .65 : .80, blur: 0});
+  const ownFinite = (value, key) => Object.hasOwn(value, key) && typeof value[key] === 'number' && Number.isFinite(value[key]);
+  function rememberRightScene(profiles, mode, opacity, blur, initialFor = rightSceneDefaults) {
+    const initial = initialFor(mode);
+    // Keep only user overrides so future initial-value corrections still apply.
+    if (opacity === initial.opacity && blur === initial.blur) delete profiles[mode];
+    else profiles[mode] = {opacity, blur};
+  }
+  function normalizeRightScenes(value, initialFor = rightSceneDefaults) {
+    const profiles = {};
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return profiles;
+    for (const mode of rightSceneModes) {
+      if (!Object.hasOwn(value, mode)) continue;
+      const scene = value[mode], initial = initialFor(mode);
+      if (!scene || typeof scene !== 'object' || Array.isArray(scene) || !ownFinite(scene, 'opacity') && !ownFinite(scene, 'blur')) continue;
+      rememberRightScene(profiles, mode, bounded(ownFinite(scene, 'opacity') ? scene.opacity : undefined, initial.opacity, 0, 1), bounded(ownFinite(scene, 'blur') ? scene.blur : undefined, initial.blur, 0, 24), initialFor);
+    }
+    return profiles;
+  }
+  function settingDefault(key, current) {
+    if (key === 'opacity') return current.glass === 'frosted' ? defaults.frostOpacity : defaults.liquidOpacity;
+    if (key === 'rightOpacity') return rightSceneDefaults(current.rightGlass).opacity;
+    if (key === 'rightBlur') return rightSceneDefaults(current.rightGlass).blur;
+    if (key === 'contextOpacity') return contextSceneDefaults(contextMode(current)).opacity;
+    if (key === 'contextBlur') return contextSceneDefaults(contextMode(current)).blur;
+    return key.endsWith('SceneProfiles') ? {} : defaults[key];
+  }
   function normalize(value) {
     const p = value && typeof value === 'object' ? value : {}, n = { ...defaults };
     for (const k of ['startup','sound','rightLinked','headerLinked']) if (typeof p[k] === 'boolean') n[k] = p[k];
     if (p.animation === '2') n.animation = '2';
     if (p.voice === 'asuna') n.voice = 'asuna';
-    for (const key of ['accent','surfaceColor']) if (typeof p[key] === 'string' && /^#[0-9a-f]{6}$/i.test(p[key])) n[key] = p[key].toUpperCase();
+    for (const key of ['accent','surfaceColor']) { if (p[key] === null) n[key] = null; else if (typeof p[key] === 'string' && /^#[0-9a-f]{6}$/i.test(p[key])) n[key] = p[key].toUpperCase(); }
     if (['off','frosted','liquid'].includes(p.glass)) n.glass = p.glass;
     if (['off','frosted','liquid'].includes(p.rightGlass)) n.rightGlass = p.rightGlass;
+    if (['follow',...rightSceneModes].includes(p.contextGlass)) n.contextGlass = p.contextGlass;
+    n.contextSceneProfiles = normalizeRightScenes(p.contextSceneProfiles, contextSceneDefaults);
+    const contextScene = n.contextSceneProfiles[contextMode(n)] || contextSceneDefaults(contextMode(n));
+    n.contextOpacity = contextScene.opacity; n.contextBlur = contextScene.blur;
     n.rightLiquidOpacity = bounded(p.rightLiquidOpacity, defaults.rightLiquidOpacity, 0, 1); n.rightFrostOpacity = bounded(p.rightFrostOpacity, defaults.rightFrostOpacity, 0, 1);
-    n.rightOpacity = bounded(p.rightOpacity, defaults.rightOpacity, 0, 1);
-    n.rightBlur = bounded(p.rightBlur, defaults.rightBlur, 0, 24);
+    n.rightSceneProfiles = normalizeRightScenes(Object.hasOwn(p, 'rightSceneProfiles') ? p.rightSceneProfiles : undefined);
+    // Legacy scene values are meaningful only when the right column was independent.
+    // The old rightLiquidOpacity/rightFrostOpacity fields describe local surfaces.
+    if (!Object.hasOwn(p, 'rightSceneProfiles') && p.rightLinked === false && (ownFinite(p, 'rightOpacity') || ownFinite(p, 'rightBlur'))) {
+      const initial = rightSceneDefaults(n.rightGlass);
+      rememberRightScene(n.rightSceneProfiles, n.rightGlass, bounded(ownFinite(p, 'rightOpacity') ? p.rightOpacity : undefined, initial.opacity, 0, 1), bounded(ownFinite(p, 'rightBlur') ? p.rightBlur : undefined, initial.blur, 0, 24));
+    }
+    const rightScene = n.rightSceneProfiles[n.rightGlass] || rightSceneDefaults(n.rightGlass);
+    n.rightOpacity = rightScene.opacity; n.rightBlur = rightScene.blur;
     if (['none','custom',...builtins.map(x => x.id)].includes(p.wallpaper)) n.wallpaper = p.wallpaper;
     n.volume = bounded(p.volume, .65, 0, 1);
     n.liquidOpacity = bounded(p.liquidOpacity, defaults.liquidOpacity, 0, 1); n.frostOpacity = bounded(p.frostOpacity, defaults.frostOpacity, 0, 1);
@@ -40,7 +82,24 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     n.wallX = bounded(p.wallX, 50, 0, 100); n.wallY = bounded(p.wallY, 50, 0, 100); n.wallScale = bounded(p.wallScale, 100, 100, 250);
     return n;
   }
-  let preferences; try { preferences = normalize(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { preferences = { ...defaults }; }
+  function patchPreferences(current, patch) {
+    const next = { ...current, ...patch };
+    const profiles = normalizeRightScenes(next.rightSceneProfiles);
+    if (!current.rightLinked && (next.rightLinked !== false || next.rightGlass !== current.rightGlass)) rememberRightScene(profiles, current.rightGlass, current.rightOpacity, current.rightBlur);
+    const mode = rightSceneModes.includes(next.rightGlass) ? next.rightGlass : defaults.rightGlass;
+    const scene = profiles[mode] || rightSceneDefaults(mode);
+    if (ownFinite(patch, 'rightOpacity') || ownFinite(patch, 'rightBlur')) rememberRightScene(profiles, mode, bounded(ownFinite(patch, 'rightOpacity') ? patch.rightOpacity : undefined, scene.opacity, 0, 1), bounded(ownFinite(patch, 'rightBlur') ? patch.rightBlur : undefined, scene.blur, 0, 24));
+    next.rightSceneProfiles = profiles;
+    const contextProfiles = normalizeRightScenes(next.contextSceneProfiles, contextSceneDefaults);
+    const activeContextMode = contextMode(next), contextScene = contextProfiles[activeContextMode] || contextSceneDefaults(activeContextMode);
+    if (ownFinite(patch, 'contextOpacity') || ownFinite(patch, 'contextBlur')) rememberRightScene(contextProfiles, activeContextMode, bounded(ownFinite(patch, 'contextOpacity') ? patch.contextOpacity : undefined, contextScene.opacity, 0, 1), bounded(ownFinite(patch, 'contextBlur') ? patch.contextBlur : undefined, contextScene.blur, 0, 24), contextSceneDefaults);
+    next.contextSceneProfiles = contextProfiles;
+    if (patch.headerLinked === false && current.headerLinked) next.rightHeaderOpacity = current.headerOpacity;
+    if (patch.glass && patch.glass !== current.glass && !Object.hasOwn(patch, 'opacity')) next.opacity = patch.glass === 'frosted' ? current.frostOpacity : current.liquidOpacity;
+    if (Object.hasOwn(patch, 'opacity')) { if (next.glass === 'frosted') next.frostOpacity = patch.opacity; else next.liquidOpacity = patch.opacity; }
+    return normalize(next);
+  }
+  let preferences; try { preferences = normalize(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { preferences = normalize({}); }
   let disposed = false, notice = '', tokenDispose = null, customURL = null, customName = '', queued = 0, revision = 0, uploadRevision = 0;
   const subscribers = new Set(), panelDisposers = new Set(), touched = new Set(), componentTouched = new Set();
   const style = document.createElement('style'); style.dataset.saoAppearance = '4'; document.head.append(style);
@@ -59,14 +118,31 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   const scopes = '[data-slot="main.conversation"], [data-slot="rightbar"], [role="dialog"][data-shortcut-modal="settings"]';
   const layoutTouched = new Set(), shellTouched = new Set();
   let lastStyle = '', lastWallpaperCSS = '';
-  const backdropStyles = new WeakMap();
+  const backdropStyles = new WeakMap(), contextTouched = new Set();
+  const contextRootSelector = '[data-sidebar-right-session] div[data-sidebar-right-tab] .lc-root';
+  const contextCardSelector = contextRootSelector + ' .lc-card';
+  const isContextCard = el => el.matches(contextCardSelector) && !el.parentElement?.closest('.lc-card');
+  let contextRects = [];
+  function updateContextRoots() {
+    const active = contextMode(preferences) !== 'off' ? [...document.querySelectorAll(contextRootSelector)].filter(el => { const r=el.getBoundingClientRect(); return r.width>0 && r.height>0 && getComputedStyle(el).visibility!=='hidden'; }) : [];
+    for (const el of contextTouched) if (!active.includes(el)) { el.removeAttribute('data-sao-context'); resizeObserver?.unobserve(el); contextTouched.delete(el); }
+    contextRects = active.map(el => { if (!el.hasAttribute('data-sao-context')) el.setAttribute('data-sao-context',''); contextTouched.add(el); const r=el.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; });
+  }
   let conversationBounds = {x:0,y:0,width:innerWidth,height:innerHeight}, rightBounds = null, observedRight = null;
   const rightScene = () => ({opacity: preferences.rightLinked ? preferences.conversationOpacity : preferences.rightOpacity, blur: preferences.rightLinked ? preferences.conversationBlur : preferences.rightBlur});
   // Both columns use exactly the same full-area mask and blur, never two stacked fills.
-  function paintBackdrop(element, box, opacity, blur, radius = '0px', corner = 'round') {
-    element.hidden = !loadedSource || !box || opacity === 0 && blur === 0;
+  function paintBackdrop(element, box, opacity, blur, radius = '0px', corner = 'round', material = 'off') {
+    // A single fill owns the right scene. Frost adds diffusion; liquid adds an
+    // edge-only optical canvas so an explicitly blurred center stays blurred.
+    const diffusion = material === 'frosted' && opacity > 0 ? Math.max(12, blur) : blur;
+    element.hidden = !box || opacity === 0 && diffusion === 0;
+    if (element === rightBackdrop && element.getAttribute('data-sao-scene-material') !== material) element.setAttribute('data-sao-scene-material',material);
     if (!box) return;
-    const css = `position:absolute;left:${box.x-bounds.x}px;top:${box.y-bounds.y}px;width:${box.width}px;height:${box.height}px;pointer-events:none;border-radius:${radius} 0 0 0;corner-shape:${corner};background:rgb(${sceneColor().map(v=>v*255).join(' ')} / ${opacity});backdrop-filter:${blur ? `blur(${blur}px)` : 'none'};-webkit-backdrop-filter:${blur ? `blur(${blur}px)` : 'none'}`;
+    // Exclude context content from the full-column mask. Its own cards paint
+    // once over the wallpaper, including when dock panes are split side by side.
+    const holes = element === rightBackdrop ? contextRects.map(r => ({x:Math.max(0,r.x-box.x),y:Math.max(0,r.y-box.y),right:Math.min(box.width,r.x+r.width-box.x),bottom:Math.min(box.height,r.y+r.height-box.y)})).filter(r => r.right>r.x && r.bottom>r.y) : [];
+    const path = holes.length ? `M0 0H${box.width}V${box.height}H0Z ` + holes.map(r => `M${r.x} ${r.y}H${r.right}V${r.bottom}H${r.x}Z`).join(' ') : '';
+    const css = `position:absolute;left:${box.x-bounds.x}px;top:${box.y-bounds.y}px;width:${box.width}px;height:${box.height}px;pointer-events:none;border-radius:${element === rightBackdrop ? '16px' : radius + ' 0 0 0'};corner-shape:${corner};isolation:isolate;overflow:hidden;clip-path:${path ? `path(evenodd,"${path}")` : 'none'};--sao-edge-strength:${4*opacity*(1-opacity)};background:rgb(${sceneColor().map(v=>v*255).join(' ')} / ${opacity});backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'};-webkit-backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'}`;
     if (backdropStyles.get(element) !== css) { element.style.cssText = css; backdropStyles.set(element,css); }
   }
   const writeStyle = () => { if (style.textContent !== lastStyle) style.textContent = lastStyle; };
@@ -103,14 +179,16 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const right = boxFor(document.querySelector('[data-slot="rightbar"]')?.parentElement);
     const r = right?.getBoundingClientRect();
     rightBounds = r && r.width > 0 && r.height > 0 ? {x:r.left,y:r.top,width:r.width,height:r.height} : null;
+    updateContextRoots();
     const scene = rightScene();
-    paintBackdrop(rightBackdrop, rightBounds, scene.opacity, scene.blur);
+    paintBackdrop(rightBackdrop, rightBounds, scene.opacity, scene.blur, '16px', 'round', preferences.rightLinked ? preferences.glass : preferences.rightGlass);
     for (const el of layoutTouched) if (el !== column && el !== right) { el.removeAttribute('data-sao-wall-column'); el.removeAttribute('data-sao-wall-right'); layoutTouched.delete(el); }
     if (right) { if (!right.hasAttribute('data-sao-wall-column')) right.setAttribute('data-sao-wall-column',''); if (!right.hasAttribute('data-sao-wall-right')) right.setAttribute('data-sao-wall-right',''); layoutTouched.add(right); }
     if (wallHost !== column || observedRight !== right) { resizeObserver?.disconnect(); resizeObserver?.observe(column); resizeObserver?.observe(frame); if (right) resizeObserver?.observe(right); wallHost = column; observedRight = right; }
+    for (const root of contextTouched) resizeObserver?.observe(root);
   }
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
-    if (disposed || !loadedSource) return;
+    if (disposed || !frameHost) return;
     // ResizeObserver runs before paint: keep the mask and optical samples on
     // the same geometry, without another requestAnimationFrame of latency.
     sync();
@@ -119,11 +197,11 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   // Only known core surfaces; SlotOutlet itself uses display:contents.
   const rightHeaderSelector = '[data-rightbar-col] [data-sidebar-right-panel] [data-dockkit-strip]';
   const rightBodySelector = '[data-rightbar-col] [data-sidebar-right-panel] [data-dockkit-host="dock"] > [data-dockkit-content] > div:has(>[data-dockkit-strip]) + div';
-  const componentSelector = '[data-changed-files],[data-presented-file],[data-team-panel],[data-testid="todo-panel"],[data-menu-material]:has(>ul[aria-label="后台任务"]),[data-menu-material]:has(>ul[aria-label="Background jobs"])';
+  const componentSelector = '[data-changed-files],[data-presented-file],[data-team-panel],[data-testid="todo-panel"],section[data-turn-trigger],[data-menu-material]:has(>ul[aria-label="后台任务"]),[data-menu-material]:has(>ul[aria-label="Background jobs"])';
   const surfaceSelectors = [
     '[data-slot="conversation.header"] > header',
     '[data-slot="rightbar.session"] > *',
-    rightHeaderSelector, rightBodySelector,
+    rightHeaderSelector, rightBodySelector, contextCardSelector,
     '[data-rightbar-col] [data-sidebar-right-panel] [data-dockkit-host="dock"] > [data-dockkit-content]:not(:has(>div>[data-dockkit-strip]))',
     '[data-rightbar-col] [data-sidebar-right-panel] [data-dockkit-empty]',
     '[role="dialog"][data-shortcut-modal="settings"]'
@@ -166,14 +244,14 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
       loadedSource = source || ''; imageReady = false;
       if (source) image.src = source; else image.removeAttribute('src');
     }
-    background.hidden = !source;
+    background.hidden = false; image.hidden = !source;
     image.style.objectPosition = `${p.wallX}% ${p.wallY}%`; image.style.transform = `scale(${p.wallScale / 100})`;
     image.style.opacity = String(p.wallOpacity);
     layoutWallpaper();
-    if (!source) background.remove();
     background.style.background = 'var(--dsw-alias-bg-base,#f4f6f9)';
     const rightGlass = p.rightLinked ? p.glass : p.rightGlass, rightOpacity = rightScene().opacity, rightBlur = rightScene().blur;
-    const glass = p.glass !== 'off' || rightGlass !== 'off', alpha = p.opacity, blur = p.conversationBlur;
+    const contextGlass = contextMode(p);
+    const glass = p.glass !== 'off' || rightGlass !== 'off' || contextGlass !== 'off', alpha = p.opacity, blur = p.conversationBlur;
     const materialBase = 'var(--dsw-alias-bg-base,#f4f6f9)';
     lastStyle = `${accentCSS}
 @font-face{font-family:"SAO Local Rounded";src:local("方正兰亭圆_准"),local("方正兰亭圆_GBK_准"),local("FZLanTingYuan-M-GBK");font-display:swap;font-weight:400}
@@ -184,9 +262,10 @@ body{--sao-font:${JSON.stringify(p.fontFamily === '方正兰亭圆_准' ? 'SAO L
 [data-sao-shell] :is(button,input,select,textarea){font-weight:400}
 [data-sao-shell] :is(h1,h2,h3){font-weight:500}
 ${scopes.split(',').map(s => `${s.trim()} :is(button,input,select,textarea)`).join(',')}{font-family:var(--sao-font)}
-${source ? `[data-sao-wall-frame]{isolation:isolate}[data-sao-wall-frame][data-sao-wall-positioned]{position:relative}[data-sao-wall-column]{background:transparent!important}[data-sao-wall-right] :is([data-sidebar-right-panel],[data-dockkit-host="dock"],[data-dockkit-content],[data-dockkit-column],[data-dockkit-empty]),[data-sao-wall-right] [data-dockkit-content] > div,[data-sao-wall-right] [data-slot="rightbar.session"] > *{background:transparent!important}[data-slot="main.conversation"] > [data-phase]{background:transparent!important}[data-slot="main.conversation"] [data-composer-seat]{background:transparent!important}` : '[data-slot="main.conversation"] > [data-phase]{background:var(--sao-shell-base)!important}'}
+${background.parentElement ? `[data-sao-wall-frame]{isolation:isolate}[data-sao-wall-frame][data-sao-wall-positioned]{position:relative}[data-sao-wall-column]{background:transparent!important}[data-sao-wall-right] :is([data-sidebar-right-panel],[data-dockkit-host="dock"],[data-dockkit-content],[data-dockkit-column],[data-dockkit-empty]),[data-sao-wall-right] [data-dockkit-content] > div,[data-sao-wall-right] [data-slot="rightbar.session"] > *{background:transparent!important}[data-slot="main.conversation"] > [data-phase]{background:transparent!important}[data-slot="main.conversation"] [data-composer-seat]{background:transparent!important}` : '[data-slot="main.conversation"] > [data-phase]{background:var(--sao-shell-base)!important}'}
 [data-sao-material]{isolation:isolate;corner-shape:round!important;--sao-material-base:color-mix(in srgb,${materialBase} 97%,var(--dsw-alias-brand-primary) 3%);--sao-surface-alpha:${Math.round(alpha*100)}%;--sao-surface-blur:${blur}px;--sao-surface-filter:${blur ? `blur(${blur}px) saturate(1.05)` : 'none'};border-color:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 [data-sao-zone="right"]{--sao-surface-alpha:${Math.round(rightOpacity*100)}%;--sao-surface-blur:0px;--sao-surface-filter:none}
+[data-sao-zone="context"]{--sao-surface-alpha:${Math.round(p.contextOpacity*100)}%;--sao-surface-blur:${p.contextBlur}px;--sao-surface-filter:${p.contextBlur ? `blur(${p.contextBlur}px)` : 'none'}}
 [data-sao-zone="composer"]{--sao-surface-alpha:${Math.round(p.composerOpacity*100)}%}
 [data-sao-zone="header"]{--sao-surface-alpha:${Math.round(p.headerOpacity*100)}%}
 [data-sao-zone="header-right"]{--sao-surface-alpha:${Math.round((p.headerLinked?p.headerOpacity:p.rightHeaderOpacity)*100)}%;--sao-surface-blur:${rightBlur}px;--sao-surface-filter:${rightBlur ? `blur(${rightBlur}px) saturate(1.05)` : 'none'}}
@@ -196,6 +275,17 @@ body:has([data-menu-material][data-sao-material]) [data-menu-backing],
 [role="tooltip"]{--dsw-alias-tooltip-key-bg:transparent!important;--dsw-alias-tooltip-key-label:var(--dsw-alias-label-primary)!important}
 [role="tooltip"] kbd,[role="tooltip"] kbd::before,[role="tooltip"] kbd::after{background:transparent!important;box-shadow:none!important;text-shadow:none!important;color:inherit!important}
 [data-sao-component]{background:color-mix(in srgb,${materialBase} ${Math.round(p.componentOpacity*100)}%,transparent)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;--changes-fill:transparent!important;--deliverable-fill:transparent!important;--dsw-alias-bg-layer-2:transparent!important}
+section[data-turn-trigger][data-sao-component]{--dsw-alias-turn-trigger-bg:color-mix(in srgb,${materialBase} ${Math.round(p.componentOpacity*100)}%,transparent);--dsw-alias-turn-trigger-bg-hover:color-mix(in srgb,${materialBase} ${Math.max(0,Math.round(p.componentOpacity*100)-5)}%,transparent)}
+section[data-turn-trigger][data-sao-component]:hover{background:var(--dsw-alias-turn-trigger-bg-hover)!important}
+/* Context-owned local hooks keep nested controls translucent without
+   * touching global theme layers, chart hues or duration contrast halos. */
+[data-sao-context]{--lc-canvas:transparent!important;--lc-subpanel-bg:color-mix(in srgb,${materialBase} 8%,transparent)!important;--lc-control-track:color-mix(in srgb,${materialBase} 10%,transparent)!important;background:transparent!important}
+[data-sao-context] .lc-card .lc-card{background:var(--lc-subpanel-bg)!important;box-shadow:none!important}
+[data-sao-context] :is(.lc-stat,.lc-cmd-kpi){background:var(--lc-subpanel-bg)!important}
+[data-sao-context] :is(.lc-chart-tip,.lc-tip){background:color-mix(in srgb,${materialBase} 92%,transparent)!important}
+/* Share the goal strip's one native menu layer across the ENTIRE task shell. */
+section[data-testid="todo-panel"][data-sao-component]{position:relative;isolation:isolate;--dsw-alias-bg-layer-2:inherit!important;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-radius:var(--dsw-radius-md);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);box-shadow:var(--dsw-elevation-panel);border:0}
+section[data-testid="todo-panel"][data-sao-component]::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:color-mix(in srgb,var(--dsw-specific-menu) ${Math.round(p.componentOpacity*100)}%,transparent);backdrop-filter:var(--dsw-menu-backdrop-filter);-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter)}
 [data-team-panel][data-sao-component]{background:transparent!important;--dsw-specific-menu:color-mix(in srgb,${materialBase} ${Math.round(p.componentOpacity*100)}%,transparent)!important}
 [data-team-panel][data-sao-component]::before{background:var(--dsw-specific-menu)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 [data-menu-material][data-sao-component]>div[aria-hidden="true"]{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
@@ -214,7 +304,12 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
 [data-sao-material]>[data-sao-liquid]{z-index:-1!important;border-radius:inherit;corner-shape:inherit;background:transparent;box-shadow:none;border:0}
 /* Keep the readable base; the GPU canvas is a lightweight optical overlay. */
 [data-sao-material="liquid"]:has(>[data-sao-liquid]:not([hidden]))::before{backdrop-filter:none;-webkit-backdrop-filter:none}
-[data-sao-material="frosted"]{background:transparent!important}
+[data-sao-material="frosted"]{background:transparent!important;--sao-surface-filter:blur(max(12px,var(--sao-surface-blur,0px))) saturate(.95)}
+[data-sao-right-backdrop] > [data-sao-liquid]{position:absolute;inset:0;z-index:1!important;border-radius:inherit;pointer-events:none}
+[data-sao-right-backdrop]::after{content:"";position:absolute;inset:0;z-index:2;border-radius:inherit;pointer-events:none;opacity:var(--sao-edge-strength,0)}
+[data-sao-scene-material="liquid"]::after{box-shadow:inset 0 0 0 1px rgb(255 255 255 / .48),inset 2px 2px 5px rgb(255 255 255 / .25),inset -2px -2px 6px rgb(15 35 55 / .14);background:linear-gradient(135deg,rgb(255 255 255 / .14),transparent 22%,transparent 78%,rgb(20 45 70 / .06))}
+[data-sao-scene-material="frosted"]::after{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent)}
+[data-sao-scene-material="off"]::after{display:none}
 [data-sao-material="liquid"]{background:transparent!important}
 @media(prefers-reduced-motion:reduce){[data-sao-material]{transition:none}}
 `;
@@ -224,14 +319,14 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
     const isRightHeader = el => el.matches(rightHeaderSelector);
     const isComposer = el => el.matches('[data-composer-card]') || !!el.querySelector(':scope > [data-slot="conversation.input.attachments"],:scope > [data-slot="conversation.input.overlay"]');
     const isRight = el => !isWindow(el) && !!el.closest('[data-rightbar-col],[data-slot="rightbar"],[data-slot="rightbar.session"]');
-    const surfaceMode = el => isRight(el) ? rightGlass : p.glass;
-    const surfaces = glass ? chooseSurfaces().filter(el => surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el))) : [];
+    const surfaceMode = el => isContextCard(el) ? contextGlass : isRight(el) ? rightGlass : p.glass;
+    const surfaces = glass ? chooseSurfaces().filter(el => surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el) || isContextCard(el))) : [];
     // Include orphaned markers from earlier clients, not only nodes owned by this instance.
     for (const el of new Set([...touched,...document.querySelectorAll('[data-sao-material]')])) if (!surfaces.includes(el)) { for (const attr of materialAttributes) el.removeAttribute(attr); touched.delete(el); }
     for (const el of surfaces) {
       if (!el.hasAttribute('data-sao-material') && getComputedStyle(el).position === 'static') el.setAttribute('data-sao-positioned','');
       if (el.getAttribute('data-sao-material') !== surfaceMode(el)) el.setAttribute('data-sao-material', surfaceMode(el));
-      const zone = isWindow(el) ? 'window' : isRightHeader(el) ? 'header-right' : isHeader(el) ? 'header' : isComposer(el) ? 'composer' : isRight(el) ? 'right' : 'conversation'; if (el.getAttribute('data-sao-zone') !== zone) el.setAttribute('data-sao-zone', zone);
+      const zone = isContextCard(el) ? 'context' : isWindow(el) ? 'window' : isRightHeader(el) ? 'header-right' : isHeader(el) ? 'header' : isComposer(el) ? 'composer' : isRight(el) ? 'right' : 'conversation'; if (el.getAttribute('data-sao-zone') !== zone) el.setAttribute('data-sao-zone', zone);
       const type = (isHeader(el) || isRightHeader(el) || el.matches(rightBodySelector) || el.matches('[data-dockkit-content],[data-dockkit-empty],[data-sidebar-right-panel]')) ? 'joined' : 'floating'; if (el.getAttribute('data-sao-surface') !== type) el.setAttribute('data-sao-surface', type);
       touched.add(el);
     }
@@ -240,16 +335,17 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
     for (const el of components) { if (!el.hasAttribute('data-sao-component')) el.setAttribute('data-sao-component',''); componentTouched.add(el); }
     const isConversationSurface = el => !isRight(el) && !isWindow(el);
     // Nonzero background blur uses the CSS backdrop path rather than a costly or mismatched GPU approximation.
-    const liquidSurfaces = surfaces.filter(el => surfaceMode(el) === 'liquid' && !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el)));
-    const surfaceBackgrounds = new Map(liquidSurfaces.filter(el => isConversationSurface(el) || isRight(el) && rightBounds).map(el => [el,{opacity:isRight(el) ? rightOpacity : p.conversationOpacity,color:sceneColor(),bounds:isRight(el) ? rightBounds : conversationBounds}]));
-    liquid.update({ enabled: liquidSurfaces.length > 0, surfaces: liquidSurfaces, surfaceOpacities: new Map(liquidSurfaces.map(el => [el, isWindow(el) ? p.windowOpacity : isRightHeader(el) ? (p.headerLinked?p.headerOpacity:p.rightHeaderOpacity) : isHeader(el) ? p.headerOpacity : isComposer(el) ? p.composerOpacity : isRight(el) ? rightOpacity : p.opacity])), surfaceBackgrounds, baseColor:baseColor(), image: imageReady ? image : null, position: { x: p.wallX, y: p.wallY, scale: p.wallScale }, bounds, wallOpacity: p.wallOpacity, opacity: p.opacity });
+    const liquidSurfaces = surfaces.filter(el => surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
+    if (rightGlass === 'liquid' && rightBounds && !rightBackdrop.hidden) liquidSurfaces.unshift(rightBackdrop);
+    const surfaceBackgrounds = new Map(liquidSurfaces.filter(el => el !== rightBackdrop && !isContextCard(el) && (isConversationSurface(el) || isRight(el) && rightBounds)).map(el => [el,{opacity:isRight(el) ? rightOpacity : p.conversationOpacity,color:sceneColor(),bounds:isRight(el) ? rightBounds : conversationBounds}]));
+    liquid.update({ enabled: liquidSurfaces.length > 0, surfaces: liquidSurfaces, edgeOnlySurfaces: new Set([rightBackdrop,...liquidSurfaces.filter(el => isContextCard(el) && p.contextBlur > 0)]), surfaceOpacities: new Map(liquidSurfaces.map(el => [el, el === rightBackdrop ? rightOpacity : isContextCard(el) ? p.contextOpacity : isWindow(el) ? p.windowOpacity : isRightHeader(el) ? (p.headerLinked?p.headerOpacity:p.rightHeaderOpacity) : isHeader(el) ? p.headerOpacity : isComposer(el) ? p.composerOpacity : isRight(el) ? rightOpacity : p.opacity])), surfaceBackgrounds, baseColor:baseColor(), image: imageReady ? image : null, position: { x: p.wallX, y: p.wallY, scale: p.wallScale }, bounds, wallOpacity: p.wallOpacity, opacity: p.opacity });
   }
   image.onload = () => { imageReady = true; schedule(); };
   image.onerror = () => { imageReady = false; notice = '壁纸载入失败，请重新选择或上传'; notify(); };
   function schedule() { if (!disposed && !document.hidden && !queued) queued = requestAnimationFrame(() => { queued = 0; sync(); }); }
-  const structure = '[data-slot],[data-dockkit-content],[data-dockkit-empty],[data-dockkit-strip],[data-sidebar-right-panel],[data-sao-material],' + windowSelector + ',' + componentSelector;
+  const structure = '[data-slot],[data-dockkit-content],[data-dockkit-empty],[data-dockkit-strip],[data-sidebar-right-panel],[data-sao-material],' + windowSelector + ',' + componentSelector + ',' + contextRootSelector + ',' + contextCardSelector;
   const observer = new MutationObserver(records => {
-    if (records.some(r => r.type === 'attributes' ? r.target.matches?.(windowSelector) && (!['style','class'].includes(r.attributeName) || !touched.has(r.target)) : r.type === 'childList' && [...r.addedNodes,...r.removedNodes].some(n => n.nodeType === 1 && !n.matches?.('[data-sao-liquid],[data-sao-wallpaper]') && (n.matches?.(structure) || n.firstElementChild && n.querySelector?.(structure))))) schedule();
+    if (records.some(r => r.type === 'attributes' ? r.target.matches?.(windowSelector + ',' + contextRootSelector) && (!['style','class'].includes(r.attributeName) || !touched.has(r.target)) : r.type === 'childList' && [...r.addedNodes,...r.removedNodes].some(n => n.nodeType === 1 && !n.matches?.('[data-sao-liquid],[data-sao-wallpaper]') && (n.matches?.(structure) || n.firstElementChild && n.querySelector?.(structure))))) schedule();
   });
   observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','open','data-state','role','style','class']});
   const onStorage = event => { if (event.key === KEY) { try { preferences = normalize(JSON.parse(event.newValue || '{}')); applyTokens(); sync(); notify(); } catch {} } };
@@ -318,31 +414,22 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
     } catch (error) { if (preferences.wallpaper === 'custom') storageNotice(error); }
   }
   const api = {
-    get: () => ({ ...preferences }), status: () => notice,
+    get: () => ({ ...preferences, rightSceneProfiles: normalizeRightScenes(preferences.rightSceneProfiles), contextSceneProfiles: normalizeRightScenes(preferences.contextSceneProfiles, contextSceneDefaults) }), status: () => notice,
+    getDefault: key => Object.hasOwn(defaults, key) ? settingDefault(key, preferences) : undefined,
     get animationPreviews() { return animationPreviews; },
     get wallpapers() { return [...builtins, ...(customURL ? [{id:'custom',name:customName,src:customURL}] : [])]; },
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     set(patch) {
       if (disposed) return;
-      const next = { ...preferences, ...patch };
-      if (patch.headerLinked === false && preferences.headerLinked) next.rightHeaderOpacity = preferences.headerOpacity;
-      if (patch.rightLinked === false && preferences.rightLinked) {
-        next.rightGlass = preferences.glass; next.rightOpacity = preferences.conversationOpacity; next.rightBlur = preferences.conversationBlur;
-        next.rightLiquidOpacity = preferences.liquidOpacity; next.rightFrostOpacity = preferences.frostOpacity;
-      }
-      if (patch.glass && patch.glass !== preferences.glass && !Object.hasOwn(patch, 'opacity')) next.opacity = patch.glass === 'frosted' ? preferences.frostOpacity : preferences.liquidOpacity;
-      if (Object.hasOwn(patch, 'opacity')) { if (next.glass === 'frosted') next.frostOpacity = patch.opacity; else next.liquidOpacity = patch.opacity; }
-      const normalized = normalize(next);
-      if (Object.keys(defaults).every(key => Object.is(preferences[key], normalized[key]))) return;
+      const normalized = patchPreferences(preferences, patch);
+      if (Object.keys(defaults).every(key => key.endsWith('SceneProfiles') ? JSON.stringify(preferences[key]) === JSON.stringify(normalized[key]) : Object.is(preferences[key], normalized[key]))) return;
       preferences = normalized; revision++; if (Object.hasOwn(patch,'accent') || Object.hasOwn(patch,'surfaceColor')) applyTokens(); persist(); schedule();
       if (patch.startup === false) window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();
     },
     resetSetting(key, origin) {
       if (!Object.hasOwn(defaults, key) || disposed) return;
       if (key === 'theme') return changeTheme(defaults.theme, origin);
-      if (key === 'opacity') return api.set({opacity: preferences.glass === 'frosted' ? defaults.frostOpacity : defaults.liquidOpacity});
-      if (key === 'rightOpacity') return api.set({rightOpacity: defaults.rightOpacity});
-      return api.set({[key]: defaults[key]});
+      return api.set({[key]: settingDefault(key, preferences)});
     },
     setTheme: changeTheme,
     async localFonts() {
@@ -364,7 +451,7 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
       api.set({wallpaper:'custom',wallX:50,wallY:50,wallScale:100});
     },
     async removeUpload() { ++uploadRevision; await dbRequest('readwrite', s => s.delete('custom')); if (customURL) URL.revokeObjectURL(customURL); customURL = null; customName = ''; if (preferences.wallpaper === 'custom') api.set({wallpaper:'none'}); else { sync(); notify(); } },
-    async reset() { await changeTheme(defaults.theme); preferences = { ...defaults, theme: readThemePreference() }; applyTokens(); persist(); sync(); }
+    async reset() { await changeTheme(defaults.theme); preferences = normalize({ ...defaults, theme: readThemePreference() }); applyTokens(); persist(); sync(); }
   };
   function Settings() {
     const ref = React.useRef(null);
@@ -384,6 +471,7 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
     for (const el of layoutTouched) { el.removeAttribute('data-sao-wall-column'); el.removeAttribute('data-sao-wall-right'); } layoutTouched.clear();
     for (const el of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) el.removeAttribute(attr); shellTouched.clear();
     for (const el of componentTouched) el.removeAttribute('data-sao-component'); componentTouched.clear();
+    for (const el of contextTouched) el.removeAttribute('data-sao-context'); contextTouched.clear();
     tokenDispose?.(); liquid.dispose(); style.remove(); background.remove(); image.onload = image.onerror = null;
     if (customURL) URL.revokeObjectURL(customURL); for (const cleanup of panelDisposers) cleanup(); panelDisposers.clear(); subscribers.clear();
     for (const el of touched) { el.removeAttribute('data-sao-material'); el.removeAttribute('data-sao-positioned'); el.removeAttribute('data-sao-surface'); el.removeAttribute('data-sao-zone'); } touched.clear();

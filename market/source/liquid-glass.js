@@ -32,7 +32,7 @@
 function createSAOLiquidGlass() {
   'use strict';
   const win = window, doc = win.document;
-  const hosts = new Map(), surfaceOpacities = new Map(), surfaceBackgrounds = new Map(), listeners = [];
+  const hosts = new Map(), surfaceOpacities = new Map(), surfaceBackgrounds = new Map(), edgeOnlySurfaces = new Set(), listeners = [];
   const clamp = (value, low, high, fallback) => {
     const n = Number(value);
     return Number.isFinite(n) ? Math.min(high, Math.max(low, n)) : fallback;
@@ -66,6 +66,7 @@ function createSAOLiquidGlass() {
   uniform vec2 pixelSize;
   uniform vec2 bevel;
   uniform float opacity;
+   uniform float edgeOnly;
   uniform float wallOpacity;
   uniform float dark;
   uniform float sceneOpacity;
@@ -131,11 +132,11 @@ function createSAOLiquidGlass() {
     vec3 normal = normalize(vec3(outward * (edge * 0.95 + shoulder * 0.20)
                                 + lens * 0.08, 1.0));
     vec3 ray = refract(vec3(0.0, 0.0, -1.0), normal, 1.0 / 1.45);
-    float thickness = 18.0 + min(size.x, size.y) * 0.06;
+    float thickness = 24.0 + min(size.x, size.y) * 0.07;
     // Ease displacement into the boundary so adjoining surfaces do not expose
     // a hard strip of unrelated wallpaper at their seams.
     float edgeFade = smoothstep(0.0, max(2.0, footprint * 2.0), depth);
-    vec2 bend = ray.xy / max(0.25, -ray.z) * min(thickness, 42.0) * edgeFade;
+    vec2 bend = ray.xy / max(0.25, -ray.z) * min(thickness, 52.0) * edgeFade;
     vec2 screen = origin + local + bend;
     vec3 refracted = sampleScene(screen);
     vec2 light = normalize(vec2(-0.65, -0.8));
@@ -151,13 +152,16 @@ function createSAOLiquidGlass() {
     vec3 bodyNormal = normalize(vec3(lens * 0.40, 1.0));
     float sheen = pow(max(dot(bodyNormal, normalize(vec3(light * 0.50, 1.0))), 0.0), 24.0);
     vec3 tint = mix(vec3(0.93, 0.96, 1.0), vec3(0.12, 0.17, 0.23), dark);
-    vec3 optical = mix(refracted, tint, 0.035) * (1.0 - shadow * 0.14)
-      + vec3(rim * 0.48 + crest * 0.18 + sheen * 0.035);
+    vec3 optical = mix(refracted, tint, 0.035) * (1.0 - shadow * 0.18)
+      + vec3(rim * 0.64 + crest * 0.26 + sheen * 0.045);
     // CSS supplies the requested material backing. Optical accents disappear
     // at both fully transparent and fully opaque endpoints instead of exposing
     // the wallpaper again through a supposedly opaque window.
     float alpha = mask * opacity * (1.0 - opacity) *
-      (0.42 + shoulder * 0.20 + fresnel * edgeFade * 0.72 + crest * 0.65 + rim * 0.12 + sheen * 0.08);
+      (0.38 + shoulder * 0.32 + fresnel * edgeFade * 0.95 + crest * 0.80 + rim * 0.18 + sheen * 0.10);
+    // A scene backdrop already supplies its one and only central fill/blur.
+    // Restrict this overlay to the bevel; never paint a sharp center over it.
+    alpha *= mix(1.0, shoulder, edgeOnly);
     // Match the premultiplied drawing buffer used by GL -> 2D presentation.
     color = vec4(clamp(optical, 0.0, 1.0) * alpha, alpha);
   }`;
@@ -259,7 +263,7 @@ function createSAOLiquidGlass() {
       texture = gl.createTexture();
       if (!vao || !texture) throw new Error('Liquid resources unavailable');
       gl.bindVertexArray(vao);
-      for (const name of ['wallpaper', 'size', 'origin', 'photo', 'radiiX', 'radiiY', 'pixelSize', 'bevel', 'opacity', 'wallOpacity', 'dark', 'sceneOpacity', 'sceneColor', 'sceneBounds', 'proxyColor']) {
+      for (const name of ['wallpaper', 'size', 'origin', 'photo', 'radiiX', 'radiiY', 'pixelSize', 'bevel', 'opacity', 'edgeOnly', 'wallOpacity', 'dark', 'sceneOpacity', 'sceneColor', 'sceneBounds', 'proxyColor']) {
         uniforms[name] = gl.getUniformLocation(program, name);
       }
       gl.activeTexture(gl.TEXTURE0);
@@ -369,6 +373,7 @@ function createSAOLiquidGlass() {
     hosts.delete(host);
     surfaceOpacities.delete(host);
     surfaceBackgrounds.delete(host);
+    edgeOnlySurfaces.delete(host);
   }
   function prune() {
     for (const host of hosts.keys()) if (!host.isConnected) remove(host);
@@ -434,7 +439,7 @@ function createSAOLiquidGlass() {
         rect.height / Math.max(1, corners[1][1] + corners[2][1]),
         rect.width / Math.max(1, corners[2][0] + corners[3][0]),
         rect.height / Math.max(1, corners[3][1] + corners[0][1]));
-      rows.push({ entry, rect, surfaceOpacity, background: surfaceBackgrounds.get(host),
+      rows.push({ entry, rect, surfaceOpacity, edgeOnly: Number(edgeOnlySurfaces.has(host)), background: surfaceBackgrounds.get(host),
         corners: corners.map(pair => pair.map(n => n * fit)) });
     }
     for (const entry of toHide) if (!entry.canvas.hidden) entry.canvas.hidden = true;
@@ -453,7 +458,7 @@ function createSAOLiquidGlass() {
       const top = area.y + area.height / 2 + ((area.height - baseHeight) * position.y / 100 - area.height / 2) * zoom;
       const pending = [], proxyColor = baseColor || backgroundColor(dark);
       for (const row of rows) {
-        const { entry, rect, corners, surfaceOpacity, background } = row;
+        const { entry, rect, corners, surfaceOpacity, edgeOnly, background } = row;
         const sceneOpacity = background?.opacity ?? 0;
         const sceneColor = background?.color || proxyColor;
         const sceneBounds = background?.bounds || [0, 0, 0, 0];
@@ -464,7 +469,7 @@ function createSAOLiquidGlass() {
         // These are every input affecting the rendered pixels. Chat scrolling
         // or an identical update need not redraw/copy a stationary surface.
         const key = [textureVersion, dark, wallOpacity, left, top, photoWidth, photoHeight,
-          surfaceOpacity, ...proxyColor, sceneOpacity, ...sceneColor, ...sceneBounds,
+          surfaceOpacity, edgeOnly, ...proxyColor, sceneOpacity, ...sceneColor, ...sceneBounds,
           rect.left, rect.top, rect.width, rect.height, width, height, ...corners.flat()];
         if (entry.canvas.width === width && entry.canvas.height === height && entry.renderKey &&
             key.every((value, index) => value === entry.renderKey[index])) continue;
@@ -479,9 +484,10 @@ function createSAOLiquidGlass() {
       gl.uniform1f(uniforms.wallOpacity, wallOpacity);
       gl.uniform1f(uniforms.dark, Number(dark));
       gl.uniform3f(uniforms.proxyColor, ...proxyColor);
-      for (const { entry, rect, corners, surfaceOpacity, width, height, key,
+      for (const { entry, rect, corners, surfaceOpacity, edgeOnly, width, height, key,
         sceneOpacity, sceneColor, sceneBounds } of pending) {
         gl.uniform1f(uniforms.opacity, surfaceOpacity);
+        gl.uniform1f(uniforms.edgeOnly, edgeOnly);
         gl.uniform1f(uniforms.sceneOpacity, sceneOpacity);
         gl.uniform3f(uniforms.sceneColor, ...sceneColor);
         gl.uniform4f(uniforms.sceneBounds, ...sceneBounds);
@@ -495,8 +501,8 @@ function createSAOLiquidGlass() {
         gl.uniform4f(uniforms.radiiX, corners[0][0], corners[1][0], corners[2][0], corners[3][0]);
         gl.uniform4f(uniforms.radiiY, corners[0][1], corners[1][1], corners[2][1], corners[3][1]);
         const half = Math.min(rect.width, rect.height) * 0.5;
-        gl.uniform2f(uniforms.bevel, Math.max(1, Math.min(18, half * 0.55)),
-          Math.max(1, Math.min(64, half * 0.85)));
+        gl.uniform2f(uniforms.bevel, Math.max(1, Math.min(22, half * 0.55)),
+          Math.max(1, Math.min(76, half * 0.85)));
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         if (entry.canvas.width !== width) entry.canvas.width = width;
         if (entry.canvas.height !== height) entry.canvas.height = height;
@@ -596,6 +602,8 @@ function createSAOLiquidGlass() {
         if (hosts.has(host) && Number.isFinite(value)) surfaceOpacities.set(host, clamp(value, 0, 1, 0));
       }
     }
+    edgeOnlySurfaces.clear();
+    if (options.edgeOnlySurfaces instanceof Set) for (const host of options.edgeOnlySurfaces) if (hosts.has(host)) edgeOnlySurfaces.add(host);
     // Background overlays are optional per-update snapshots, like opacity maps.
     // Invalid bounds cannot apply an accidental viewport-wide mask.
     surfaceBackgrounds.clear();
@@ -646,6 +654,7 @@ function createSAOLiquidGlass() {
     for (const host of hosts.keys()) remove(host);
     surfaceOpacities.clear();
     surfaceBackgrounds.clear();
+    edgeOnlySurfaces.clear();
     releaseGPU();
     if (gl && !lost) gl.getExtension('WEBGL_lose_context')?.loseContext();
     if (shared) shared.width = shared.height = 1;

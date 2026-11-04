@@ -8,6 +8,14 @@ The prebuilt runtime is included. `index.js` injects `startup.js` in the documen
 - `source/settings-panel.js`, `appearance.js`, `liquid-glass.js` and `model-intensity.js` produce the client runtime.
 - `assets/wallpapers/` contains the nine shipped wallpaper copies. `assets/animation-previews/` contains renderer-generated preview images; the adjacent provenance records identify their sources and hashes.
 
+Appearance defaults are accent `#8CC8F4` and wallpaper `builtin-3` (SAO · 03). Composer and component backgrounds keep their 10% transparency defaults. Settings sliders use compact, softly separated label/slider/value/reset rows and wrap in narrow panels without endpoint labels.
+
+Liquid glass uses stronger wallpaper refraction and edge highlights; frosted glass uses diffuse blur. The right sidebar body receives the selected material across its full surface. It follows the conversation by default; independent material profiles start at 30% transparency / 0px blur for liquid and 50% / 0px for frosted. Each material remembers its own transparency and blur, and per-setting reset restores that material's initial value.
+
+Right-sidebar context cards follow the right material by default and can independently select liquid, frosted or original appearance. Their own material profiles start at 20% transparency / 0px blur for liquid and 35% / 0px for frosted, with separate memory and per-setting reset. Context cards receive one material layer over the wallpaper, without the full-sidebar mask filling their background again.
+
+The entire task panel uses DSH's native ongoing-goal strip material. Chat turn-trigger cards, including Continue goal, follow component background transparency and add 5 percentage points on hover without reducing text opacity.
+
 ## Build the theme client
 
 Python 3 and its standard library are sufficient. From either package directory, run:
