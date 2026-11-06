@@ -21,7 +21,7 @@ function mountSAOSettings(container, api) {
   'use strict';
   const doc = container.ownerDocument;
   const uid = 'sao-settings-' + Math.random().toString(36).slice(2, 10);
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.80, headerOpacity: 0.80, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.80, wallpaper: 'builtin-3', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
+  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.80, headerOpacity: 0.80, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.80, wallpaper: 'builtin-3', wallpaperScope: 'full', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
   let prefs = Object.assign({}, defaults, api.get());
   let disposed = false, unsubscribe = null, pending = 0, operation = 0;
   let hue = 0, saturation = 0.8, brightness = 1, colorExpanded = false, hexDirty = false;
@@ -275,6 +275,7 @@ function mountSAOSettings(container, api) {
   <div class="sao-section-head"><h3>壁纸</h3></div>
   <fieldset class="sao-wall">${fieldLegend('wallpaper', '壁纸')}<div class="sao-wall-grid" data-wall-grid></div></fieldset>
   <div class="sao-upload"><label for="${id('upload')}">上传自定义壁纸</label><input id="${id('upload')}" type="file" accept="image/*" aria-describedby="${id('upload-help')}"><p class="sao-hint" id="${id('upload-help')}">选择图片后自动保存并应用，建议使用横向图片。</p><button class="sao-btn" data-action="remove-upload" type="button" hidden>删除自定义壁纸</button></div>
+  <fieldset aria-describedby="${id('wallpaper-scope-help')}">${fieldLegend('wallpaperScope', '壁纸显示范围')}<div class="sao-choices">${choice('wallpaperScope', 'full', '全界面', '覆盖会话与右侧栏')}${choice('wallpaperScope', 'conversation', '仅限会话', '会话填充 · 右栏纯色')}</div><p class="sao-hint" id="${id('wallpaper-scope-help')}">默认全界面，保留当前效果。仅限会话时，壁纸在会话区域居中填充，可继续调整位置与大小；右侧栏使用软件当前主题的界面底色，不显示壁纸。</p></fieldset>
   <div class="sao-fit"><span>适应方式</span><span>填充 · 默认</span></div>
   ${range('wallOpacity', '壁纸不透明度', 0, 100, '%')}
   ${range('wallX', '水平位置', 0, 100, '%')}
@@ -570,7 +571,7 @@ function mountSAOSettings(container, api) {
     find('[data-preview-glass]').textContent = { off: '无玻璃', frosted: '磨砂玻璃', liquid: '液态玻璃' }[prefs.glass] || '无玻璃';
     find('[data-preview-opacity]').textContent = '透明度 ' + Math.round((1 - Number(prefs.opacity)) * 100) + '%';
     find('[data-preview-wall]').textContent = prefs.wallpaper === 'none' ? '无壁纸' : wall ? wall.name || '已选壁纸' : '已选壁纸';
-    find('[data-preview-wall-opacity]').textContent = '背景 ' + Math.round(prefs.wallOpacity * 100) + '%';
+    find('[data-preview-wall-opacity]').textContent = '背景 ' + Math.round(prefs.wallOpacity * 100) + '% · ' + (prefs.wallpaperScope === 'conversation' ? '仅限会话' : '全界面');
   }
   const tabs = all('[data-tab]');
   function selectTab(tab, focus) {

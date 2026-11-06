@@ -11,7 +11,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
   const KEY = 'dsh-sao.preferences.v4';
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
+  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallpaperScope: 'full', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
   const bounded = (v, fallback, min, max) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
   const rightSceneModes = ['off','frosted','liquid'];
   const rightSceneDefaults = mode => ({opacity: mode === 'liquid' ? .70 : .50, blur: 0});
@@ -80,6 +80,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const rightScene = n.rightSceneProfiles[n.rightGlass] || rightSceneDefaults(n.rightGlass);
     n.rightOpacity = rightScene.opacity; n.rightBlur = rightScene.blur;
     if (['none','custom',...builtins.map(x => x.id)].includes(p.wallpaper)) n.wallpaper = p.wallpaper;
+    if (['full','conversation'].includes(p.wallpaperScope)) n.wallpaperScope = p.wallpaperScope;
     n.volume = bounded(p.volume, .65, 0, 1);
     n.liquidOpacity = bounded(p.liquidOpacity, defaults.liquidOpacity, 0, 1); n.frostOpacity = bounded(p.frostOpacity, defaults.frostOpacity, 0, 1);
     n.wallOpacity = bounded(p.wallOpacity, 1, 0, 1);
@@ -125,13 +126,25 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   const style = document.createElement('style'); style.dataset.saoAppearance = '4'; document.head.append(style);
   const background = document.createElement('div'); background.dataset.saoWallpaper = ''; background.setAttribute('aria-hidden','true');
   background.style.cssText = 'position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1';
-  const image = document.createElement('img'); image.alt = ''; image.draggable = false; image.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block'; background.append(image);
+  const wallpaperClip = document.createElement('div'); wallpaperClip.dataset.saoWallpaperClip = ''; background.append(wallpaperClip);
+  const image = document.createElement('img'); image.alt = ''; image.draggable = false; image.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block'; wallpaperClip.append(image);
   const conversationBackdrop = document.createElement('div'); conversationBackdrop.dataset.saoConversationBackdrop = ''; conversationBackdrop.hidden = true; background.append(conversationBackdrop);
+  const rightBase = document.createElement('div'); rightBase.dataset.saoWallpaperRightBase = ''; rightBase.hidden = true; background.append(rightBase);
   const rightBackdrop = document.createElement('div'); rightBackdrop.dataset.saoRightBackdrop = ''; rightBackdrop.hidden = true; background.append(rightBackdrop);
   let loadedSource = '', imageReady = false;
   const liquid = createSAOLiquidGlass();
   const baseColor = () => preferences.surfaceColor ? [1,3,5].map(i => parseInt(preferences.surfaceColor.slice(i,i+2),16)/255) : null;
   const sceneColor = () => liquid.sceneColor?.(baseColor()) || [0.906,0.937,0.969];
+  // Resolve only our theme base, never page content or wallpaper pixels.
+  let themeColorContext;
+  function wallpaperBaseColor() {
+    themeColorContext ??= document.createElement('canvas').getContext('2d', {willReadFrequently:true});
+    if (!themeColorContext) return sceneColor();
+    themeColorContext.clearRect(0,0,1,1);
+    themeColorContext.fillStyle = getComputedStyle(background).backgroundColor;
+    themeColorContext.fillRect(0,0,1,1);
+    return [...themeColorContext.getImageData(0,0,1,1).data].slice(0,3).map(v=>v/255);
+  }
   const notify = () => { for (const fn of subscribers) fn(); };
   const storageNotice = error => { notice = error ? '无法保存到本机：' + (error.message || String(error)) : '已保存到本机'; notify(); };
   function persist() { try { localStorage.setItem(KEY, JSON.stringify(preferences)); storageNotice(); } catch (error) { storageNotice(error); } }
@@ -268,6 +281,10 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     for (const viewport of viewports) contextViewportsObserved.add(viewport);
   }
   let conversationBounds = {x:0,y:0,width:innerWidth,height:innerHeight}, rightBounds = null, observedRight = null, rightJoined = false;
+  function wallpaperArea(scope, scene, conversation) {
+    return {...(scope === 'conversation' ? conversation : scene)};
+  }
+  let imageBounds = {...conversationBounds};
   // Only a docked, adjacent push column shares the conversation's outer frame.
   function joinedRightScene(main, right, mode) {
     return mode === 'push' && !!main && !!right && main.width>0 && main.height>0 && right.width>0 && right.height>0 && Math.abs(main.x+main.width-right.x)<=8 && Math.abs(main.y-right.y)<=1 && Math.abs(main.height-right.height)<=1;
@@ -291,7 +308,10 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     // Only clearer cards replace their actual fill footprint; Browser remains native.
     const holes = element === rightBackdrop ? [...browserCardPaths,...rightSurfacePaths,...(!contextSceneLayers(preferences, opacity).continuous ? contextCardPaths : [])] : conversationSurfacePaths;
     const mask = sceneHoleMask(box,holes);
-    const css = `position:absolute;left:${box.x-bounds.x}px;top:${box.y-bounds.y}px;width:${box.width}px;height:${box.height}px;pointer-events:none;border-radius:${element === rightBackdrop ? (rightJoined ? '0 0 16px 0' : '16px 0 16px 16px') : radius + ' 0 0 0'};corner-shape:${corner};isolation:isolate;overflow:hidden;mask-image:${mask};mask-mode:luminance;mask-repeat:no-repeat;mask-size:100% 100%;--sao-edge-strength:${4*opacity*(1-opacity)};background:rgb(${sceneColor().map(v=>v*255).join(' ')} / ${opacity});backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'};-webkit-backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'}`;
+    // The scoped right base is already uniform; blurring across its left edge
+    // would sample the neighboring conversation wallpaper back into the pane.
+    if (element === rightBackdrop && preferences.wallpaperScope === 'conversation') diffusion = 0;
+    const css = `position:absolute;left:${box.x-bounds.x}px;top:${box.y-bounds.y}px;width:${box.width}px;height:${box.height}px;pointer-events:none;border-radius:${element === rightBackdrop ? (rightJoined ? '0 0 16px 0' : '16px 0 16px 16px') : radius + ' 0 0 0'};corner-shape:${corner};isolation:isolate;overflow:hidden;mask-image:${mask};mask-mode:luminance;mask-repeat:no-repeat;mask-size:100% 100%;--sao-edge-strength:${4*opacity*(1-opacity)};background:${element === rightBackdrop && preferences.wallpaperScope === 'conversation' ? `color-mix(in srgb,var(--dsw-alias-bg-base,#f4f6f9) ${opacity*100}%,transparent)` : `rgb(${sceneColor().map(v=>v*255).join(' ')} / ${opacity})`};backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'};-webkit-backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'}`;
     if (backdropStyles.get(element) !== css) { element.style.cssText = css; backdropStyles.set(element,css); }
   }
   const writeStyle = () => { if (style.textContent !== lastStyle) style.textContent = lastStyle; };
@@ -334,11 +354,15 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     conversationBounds = {x:c.left,y:c.top,width:c.width,height:c.height};
     const wallCSS = `position:absolute;left:${x-f.left}px;top:${c.top-f.top}px;width:${bounds.width}px;height:${bounds.height}px;overflow:hidden;pointer-events:none;z-index:-1;border-radius:${x === c.left ? radius : '0px'} 0 0 0;corner-shape:${corner}`;
     if (lastWallpaperCSS !== wallCSS) { background.style.cssText = wallCSS; lastWallpaperCSS = wallCSS; }
+    imageBounds = wallpaperArea(preferences.wallpaperScope,bounds,conversationBounds);
+    wallpaperClip.style.cssText = `position:absolute;left:${imageBounds.x-bounds.x}px;top:${imageBounds.y-bounds.y}px;width:${imageBounds.width}px;height:${imageBounds.height}px;overflow:hidden;pointer-events:none`;
     paintBackdrop(conversationBackdrop, conversationBounds, preferences.conversationOpacity, preferences.conversationBlur, radius, corner);
     if (background.parentElement !== frame) frame.prepend(background);
     if (!column.hasAttribute('data-sao-wall-column')) column.setAttribute('data-sao-wall-column',''); layoutTouched.add(column);
     const r = right?.getBoundingClientRect();
     rightBounds = r && r.width > 0 && r.height > 0 ? {x:r.left,y:r.top,width:r.width,height:r.height} : null;
+    rightBase.hidden = preferences.wallpaperScope !== 'conversation' || !rightBounds;
+    if (rightBounds) rightBase.style.cssText = `position:absolute;left:${rightBounds.x-bounds.x}px;top:${rightBounds.y-bounds.y}px;width:${rightBounds.width}px;height:${rightBounds.height}px;background:var(--dsw-alias-bg-base,#f4f6f9);pointer-events:none`;
     updateRightPanes();
     updateContextRoots();
     const visibleRightPanel = [...(right?.querySelectorAll('[data-sidebar-right-panel][data-sidebar-right-open]') || [])].find(panel => {
@@ -376,7 +400,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     // ResizeObserver runs before paint: keep the mask and optical samples on
     // the same geometry, without another requestAnimationFrame of latency.
     sync();
-    liquid.refreshLayout?.({bounds});
+    liquid.refreshLayout?.({bounds:imageBounds});
   }) : null;
   // Only known core surfaces; SlotOutlet itself uses display:contents.
   const rightHeaderSelector = '[data-rightbar-col] [data-sidebar-right-panel] [data-dockkit-strip]';
@@ -422,7 +446,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     accentCSS = declarations.length ? `body{${declarations.join(';')}}` : '';
   }
   // A failed material pass must remain observable without taking down settings.
-  const runtimeState = {build:'desktop-dialog-surface-opacity-20261106',passes:0,error:null};
+  const runtimeState = {build:'wallpaper-scope-20261106',passes:0,error:null};
   function sync() {
     if (disposed) return;
     try { syncAppearance(); runtimeState.passes++; runtimeState.error = null; }
@@ -444,6 +468,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     image.style.opacity = String(p.wallOpacity);
     layoutWallpaper();
     background.style.background = 'var(--dsw-alias-bg-base,#f4f6f9)';
+    const scopedBase = p.wallpaperScope === 'conversation' ? wallpaperBaseColor() : baseColor();
     const rightGlass = p.rightLinked ? p.glass : p.rightGlass, rightOpacity = rightScene().opacity, rightBlur = rightScene().blur;
     const contextGlass = contextMode(p), contextLayers = contextSceneLayers(p, rightOpacity);
     const headerLayers = sceneSurfaceLayers(p.headerOpacity,p.conversationOpacity), composerLayers = sceneSurfaceLayers(p.composerOpacity,p.conversationOpacity);
@@ -608,7 +633,7 @@ ${saoBetterSidebarCSS(materialBase)}
     if (rightGlass === 'liquid' && rightBounds && !rightBackdrop.hidden) liquidSurfaces.unshift(rightBackdrop);
     // Card bevels refract the continuous scene rather than sampling untouched
     // wallpaper through it. This prevents a clear ring around a tinted card.
-    const surfaceBackgrounds = new Map(liquidSurfaces.filter(el => el !== rightBackdrop && (isConversationSurface(el) || isRight(el) && rightBounds)).map(el => [el,{opacity:surfaceLayers.get(el)?.continuous === false ? 0 : isRight(el) ? rightOpacity : p.conversationOpacity,color:sceneColor(),bounds:isRight(el) ? rightBounds : conversationBounds}]));
+    const surfaceBackgrounds = new Map(liquidSurfaces.filter(el => el !== rightBackdrop && (isConversationSurface(el) || isRight(el) && rightBounds)).map(el => [el,{opacity:surfaceLayers.get(el)?.continuous === false ? 0 : isRight(el) ? rightOpacity : p.conversationOpacity,color:isRight(el) && p.wallpaperScope === 'conversation' ? scopedBase : sceneColor(),bounds:isRight(el) ? rightBounds : conversationBounds}]));
     // Open the two optical edges at the join as well: removing a CSS border
     // alone would leave a refracted vertical bevel between the columns.
     const surfaceOpenEdges = new Map();
@@ -616,7 +641,7 @@ ${saoBetterSidebarCSS(materialBase)}
       if (host === rightBackdrop || isRightHeader(host) && host.closest('[data-dockkit-host="dock"][data-dockkit-column="0"]')) surfaceOpenEdges.set(host,{left:true});
       else if (isHeader(host)) surfaceOpenEdges.set(host,{right:true});
     }
-    liquid.update({ surfaceOpenEdges, enabled: liquidSurfaces.length > 0, surfaces: liquidSurfaces, edgeOnlySurfaces: new Set([rightBackdrop,...liquidSurfaces.filter(el => isContextCard(el) && (p.contextBlur > 0 || rightBlur > 0 || rightGlass === 'frosted'))]), surfaceOpacities: new Map(liquidSurfaces.map(el => [el, el === rightBackdrop ? rightOpacity : surfaceLayers.has(el) ? surfaceLayers.get(el).cardOpacity : isWindow(el) ? windowAlpha : isRightHeader(el) ? (p.headerLinked?p.headerOpacity:p.rightHeaderOpacity) : isHeader(el) ? p.headerOpacity : isComposer(el) ? p.composerOpacity : isRight(el) ? rightOpacity : p.opacity])), surfaceBackgrounds, baseColor:baseColor(), image: imageReady ? image : null, position: { x: p.wallX, y: p.wallY, scale: p.wallScale }, bounds, wallOpacity: p.wallOpacity, opacity: p.opacity });
+    liquid.update({ surfaceOpenEdges, enabled: liquidSurfaces.length > 0, surfaces: liquidSurfaces, edgeOnlySurfaces: new Set([rightBackdrop,...liquidSurfaces.filter(el => isContextCard(el) && (p.contextBlur > 0 || rightBlur > 0 || rightGlass === 'frosted'))]), surfaceOpacities: new Map(liquidSurfaces.map(el => [el, el === rightBackdrop ? rightOpacity : surfaceLayers.has(el) ? surfaceLayers.get(el).cardOpacity : isWindow(el) ? windowAlpha : isRightHeader(el) ? (p.headerLinked?p.headerOpacity:p.rightHeaderOpacity) : isHeader(el) ? p.headerOpacity : isComposer(el) ? p.composerOpacity : isRight(el) ? rightOpacity : p.opacity])), surfaceBackgrounds, baseColor:scopedBase, image: imageReady ? image : null, position: { x: p.wallX, y: p.wallY, scale: p.wallScale }, bounds:imageBounds, clipWallpaper:p.wallpaperScope === 'conversation', wallpaperExclusion:p.wallpaperScope === 'conversation' ? rightBounds : null, wallOpacity: p.wallOpacity, opacity: p.opacity });
   }
   image.onload = () => { imageReady = true; schedule(); };
   image.onerror = () => { imageReady = false; notice = '壁纸载入失败，请重新选择或上传'; notify(); };
@@ -767,7 +792,7 @@ ${saoBetterSidebarCSS(materialBase)}
       const betterAdapter = {selectorSupported:CSS.supports('selector(:is('+saoBetterSidebarSelectors().components+'))'),neutralRulePresent:[...(style.sheet?.cssRules||[])].some(rule=>!!rule.style?.getPropertyValue('--sao-bs-neutral-fill'))};
       const scene=rightScene(),context=contextSceneLayers(preferences,scene.opacity);
       const layerPlan={rightMaterial:preferences.rightLinked?preferences.glass:preferences.rightGlass,contextMaterial:contextMode(preferences),rightAlpha:scene.opacity,contextAlpha:preferences.contextOpacity,contextContinuous:context.continuous,contextLocalAlpha:context.cardOpacity,contextReplacementHoles:context.continuous?0:contextCardPaths.length,adaptiveRightHoles:rightSurfacePaths.length,browserHoles:browserCardPaths.length,frostedReplacementBox:'border-box'};
-      return {surfaceSettings:{glass:preferences.glass,surfaceAlpha:preferences.opacity,windowAlpha:preferences.windowOpacity,effectiveWindowAlpha:windowSurfaceOpacity(preferences),headerAlpha:preferences.headerOpacity,headerDefault:headerSceneDefaults(preferences.glass).opacity,conversationAlpha:preferences.conversationOpacity},moduleStatus,betterAdapter,layerPlan,build:runtimeState.build,passes:runtimeState.passes,error:runtimeState.error,disposed,hidden:document.hidden,stylesheet:{connected:style.isConnected,rules:cssRules,characters:style.textContent.length},wallpaper:{connected:background.isConnected,imageReady},bounds:{scene:bounds,conversation:conversationBounds,right:rightBounds},onlyBrowserRight,rightJoined,nodes,mainAncestors:chain(selectors.main),rightAncestors:chain(selectors.right)};
+      return {surfaceSettings:{glass:preferences.glass,surfaceAlpha:preferences.opacity,windowAlpha:preferences.windowOpacity,effectiveWindowAlpha:windowSurfaceOpacity(preferences),headerAlpha:preferences.headerOpacity,headerDefault:headerSceneDefaults(preferences.glass).opacity,conversationAlpha:preferences.conversationOpacity},moduleStatus,betterAdapter,layerPlan,build:runtimeState.build,passes:runtimeState.passes,error:runtimeState.error,disposed,hidden:document.hidden,stylesheet:{connected:style.isConnected,rules:cssRules,characters:style.textContent.length},wallpaper:{connected:background.isConnected,imageReady,scope:preferences.wallpaperScope,imageBounds:{...imageBounds},rightThemeBase:!rightBase.hidden},bounds:{scene:bounds,conversation:conversationBounds,right:rightBounds},onlyBrowserRight,rightJoined,nodes,mainAncestors:chain(selectors.main),rightAncestors:chain(selectors.right)};
     }
   }),'dsh-SAO read-only material inspection'));
   applyTokens(); sync(); loadCustom();

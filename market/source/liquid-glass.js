@@ -38,7 +38,7 @@ function createSAOLiquidGlass() {
     return Number.isFinite(n) ? Math.min(high, Math.max(low, n)) : fallback;
   };
   let disposed = false, enabled = false, opacity = 0.82, wallOpacity = 1;
-  let position = { x: 50, y: 50, scale: 100 }, image = null, wallpaperBounds = null;
+  let position = { x: 50, y: 50, scale: 100 }, image = null, wallpaperBounds = null, clipWallpaper = false, wallpaperExclusion = null;
   let frame = 0, timer = 0, lastDraw = -Infinity;
   let shared = null, gl = null, program = null, texture = null, vao = null;
   let attempted = false, ready = false, lost = false, textureDirty = true;
@@ -61,6 +61,9 @@ function createSAOLiquidGlass() {
   uniform vec2 size;
   uniform vec2 origin;
   uniform vec4 photo;
+  uniform vec4 wallpaperClip;
+  uniform vec4 wallpaperExclusion;
+  uniform float clipWallpaper;
   uniform vec4 radiiX;
   uniform vec4 radiiY;
   uniform vec2 pixelSize;
@@ -108,6 +111,13 @@ function createSAOLiquidGlass() {
     // The texture is premultiplied so transparent source pixels interpolate
     // without dark fringes; compose the same CSS image opacity over the base.
     vec3 scene = proxy * (1.0 - pixel.a * wallOpacity) + pixel.rgb * wallOpacity;
+    // A cropped photo may extend beyond its box after cover/zoom. The right
+    // pane also excludes wallpaper when floating over the conversation.
+    bool inPhoto = all(greaterThanEqual(screen, wallpaperClip.xy)) && all(lessThan(screen, wallpaperClip.xy + wallpaperClip.zw));
+    bool inRight = all(greaterThanEqual(screen, wallpaperExclusion.xy)) && all(lessThan(screen, wallpaperExclusion.xy + wallpaperExclusion.zw));
+    vec2 pixelScreen = origin + vec2(uv.x, 1.0 - uv.y) * size;
+    bool pixelInRight = all(greaterThanEqual(pixelScreen, wallpaperExclusion.xy)) && all(lessThan(pixelScreen, wallpaperExclusion.xy + wallpaperExclusion.zw));
+    if (clipWallpaper > 0.5 && (!inPhoto || inRight || pixelInRight)) scene = proxy;
     // Overlay bounds are in screen coordinates, including the refracted sample.
     // A neighboring surface can sample outside the conversation without tinting it.
     bool inside = all(greaterThanEqual(screen, sceneBounds.xy)) &&
@@ -268,7 +278,7 @@ function createSAOLiquidGlass() {
       texture = gl.createTexture();
       if (!vao || !texture) throw new Error('Liquid resources unavailable');
       gl.bindVertexArray(vao);
-      for (const name of ['wallpaper', 'size', 'origin', 'photo', 'radiiX', 'radiiY', 'pixelSize', 'bevel', 'openEdges', 'opacity', 'edgeOnly', 'wallOpacity', 'dark', 'sceneOpacity', 'sceneColor', 'sceneBounds', 'proxyColor']) {
+      for (const name of ['wallpaper', 'size', 'origin', 'photo', 'wallpaperClip', 'wallpaperExclusion', 'clipWallpaper', 'radiiX', 'radiiY', 'pixelSize', 'bevel', 'openEdges', 'opacity', 'edgeOnly', 'wallOpacity', 'dark', 'sceneOpacity', 'sceneColor', 'sceneBounds', 'proxyColor']) {
         uniforms[name] = gl.getUniformLocation(program, name);
       }
       gl.activeTexture(gl.TEXTURE0);
@@ -456,6 +466,7 @@ function createSAOLiquidGlass() {
       // with object-fit:cover; object-position:x% y%; scale about the area's center.
       // Keep photo's origin in screen coordinates for each surface's screen samples.
       const area = wallpaperBounds || { x: 0, y: 0, width: viewWidth, height: viewHeight };
+      const exclusion = wallpaperExclusion ? [wallpaperExclusion.x,wallpaperExclusion.y,wallpaperExclusion.width,wallpaperExclusion.height] : [0,0,0,0];
       const cover = Math.max(area.width / sourceWidth, area.height / sourceHeight);
       const baseWidth = sourceWidth * cover, baseHeight = sourceHeight * cover;
       const zoom = position.scale / 100;
@@ -475,6 +486,7 @@ function createSAOLiquidGlass() {
         // These are every input affecting the rendered pixels. Chat scrolling
         // or an identical update need not redraw/copy a stationary surface.
         const key = [textureVersion, dark, wallOpacity, left, top, photoWidth, photoHeight,
+          clipWallpaper, area.x, area.y, area.width, area.height, ...exclusion,
           surfaceOpacity, edgeOnly, ...openEdges, ...proxyColor, sceneOpacity, ...sceneColor, ...sceneBounds,
           rect.left, rect.top, rect.width, rect.height, width, height, ...corners.flat()];
         if (entry.canvas.width === width && entry.canvas.height === height && entry.renderKey &&
@@ -487,6 +499,9 @@ function createSAOLiquidGlass() {
       gl.disable(gl.BLEND);
       gl.enable(gl.SCISSOR_TEST);
       gl.uniform4f(uniforms.photo, left, top, photoWidth, photoHeight);
+      gl.uniform4f(uniforms.wallpaperClip, area.x, area.y, area.width, area.height);
+      gl.uniform4f(uniforms.wallpaperExclusion, ...exclusion);
+      gl.uniform1f(uniforms.clipWallpaper, Number(clipWallpaper));
       gl.uniform1f(uniforms.wallOpacity, wallOpacity);
       gl.uniform1f(uniforms.dark, Number(dark));
       gl.uniform3f(uniforms.proxyColor, ...proxyColor);
@@ -563,6 +578,11 @@ function createSAOLiquidGlass() {
     if ('opacity' in options) opacity = clamp(options.opacity, 0, 1, 0.82);
     if ('wallOpacity' in options) wallOpacity = clamp(options.wallOpacity, 0, 1, 1);
     if ('baseColor' in options) baseColor = normalizedColor(options.baseColor);
+    if ('clipWallpaper' in options) clipWallpaper = options.clipWallpaper === true;
+    if ('wallpaperExclusion' in options) {
+      const box = options.wallpaperExclusion;
+      wallpaperExclusion = box && [box.x,box.y,box.width,box.height].every(Number.isFinite) && box.width>0 && box.height>0 ? {...box} : null;
+    }
     if ('bounds' in options) {
       const next = options.bounds;
       const x = Number(next?.x), y = Number(next?.y);
