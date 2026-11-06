@@ -1,9 +1,27 @@
 /* Standalone settings view. Bundled inside the SAO client factory. */
+// Product preview backgrounds are partitioned into disjoint regions. Each region
+// paints its requested absolute alpha, independently of the surrounding scene.
+function saoPreviewSurface(opacity, blur, material) {
+  const alpha = Math.max(0, Math.min(1, Number(opacity) || 0));
+  const requestedBlur = Math.max(0, Math.min(24, Number(blur) || 0));
+  const diffusion = alpha === 0 ? 0 : material === 'frosted' ? Math.max(12, requestedBlur) : requestedBlur;
+  return {alpha, filter: diffusion > 0 ? 'blur(' + diffusion + 'px)' : 'none', strength: 4 * alpha * (1 - alpha)};
+}
+function saoPreviewHoleMask(box, holes) {
+  if (!(box.width > 0 && box.height > 0) || !holes.length) return 'none';
+  const rects = holes.filter(h => h.width > 0 && h.height > 0).map(h => {
+    const radius = Math.max(0, Math.min(Number(h.radius) || 0, h.width / 2, h.height / 2));
+    return '<rect x="' + (h.left - box.left) + '" y="' + (h.top - box.top) + '" width="' + h.width + '" height="' + h.height + '" rx="' + radius + '" fill="black"/>';
+  }).join('');
+  if (!rects) return 'none';
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + box.width + '" height="' + box.height + '" viewBox="0 0 ' + box.width + ' ' + box.height + '"><rect width="100%" height="100%" fill="white"/>' + rects + '</svg>';
+  return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+}
 function mountSAOSettings(container, api) {
   'use strict';
   const doc = container.ownerDocument;
   const uid = 'sao-settings-' + Math.random().toString(36).slice(2, 10);
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.40, headerOpacity: 0.40, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.40, wallpaper: 'builtin-3', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
+  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.80, headerOpacity: 0.80, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.80, wallpaper: 'builtin-3', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
   let prefs = Object.assign({}, defaults, api.get());
   let disposed = false, unsubscribe = null, pending = 0, operation = 0;
   let hue = 0, saturation = 0.8, brightness = 1, colorExpanded = false, hexDirty = false;
@@ -149,8 +167,9 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-scene-wall{position:absolute;inset:0;overflow:hidden;z-index:-1}
 [data-sao-settings] .sao-scene-wall img{width:100%;height:100%;object-fit:cover;transform-origin:center;display:block}
 [data-sao-settings] .sao-scene-conversation{position:absolute;inset:0;z-index:-1;pointer-events:none}
-[data-sao-settings] .sao-mini{width:100%;max-width:220px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);box-shadow:0 8px 28px color-mix(in srgb,var(--sao-ink) 8%,transparent);padding:15px;position:relative;overflow:hidden}
-[data-sao-settings] .sao-mini[data-glass=liquid]::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,#ffffff1f,transparent 52%,#ffffff08);border-radius:inherit}
+[data-sao-settings] .sao-mini{width:100%;max-width:220px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);box-shadow:0 8px 28px color-mix(in srgb,var(--sao-ink) 8%,transparent);padding:15px;position:relative;overflow:hidden;isolation:isolate}
+[data-sao-settings] .sao-mini-surface{position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none}
+[data-sao-settings] .sao-mini[data-glass=liquid] .sao-mini-surface::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,#ffffff1f,transparent 52%,#ffffff08);border-radius:inherit;opacity:var(--sao-preview-strength,0)}
 [data-sao-settings] .sao-mini-title{display:flex;align-items:center;gap:7px;padding:2px 6px;border-radius:var(--sao-radius-control);font-size:12px;font-weight:500;position:relative}
 [data-sao-settings] .sao-mini-mark{width:9px;height:9px;border-radius:2px;transform:rotate(45deg);background:var(--sao-mark);flex-shrink:0}
 [data-sao-settings] .sao-mini-component{margin-top:10px;padding:6px 8px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);position:relative}
@@ -224,6 +243,7 @@ function mountSAOSettings(container, api) {
     </div>
   </fieldset>
   <fieldset data-surface-colors>${fieldLegend('surfaceColor', '界面底色')}<div class="sao-swatches" data-surface-swatches role="radiogroup" aria-label="界面底色预设"></div><p class="sao-current-color" data-surface-label></p><div data-surface-picker></div></fieldset>
+  <p class="sao-hint">透明度：0% 完全不透明，100% 完全透明；透明端点关闭材质模糊与折光。会话背景、顶栏、输入框和内容组件独立调节。</p>
   ${range('windowOpacity', '全局窗口透明度', 0, 100, '%')}
   ${range('composerOpacity', '输入框透明度', 0, 100, '%')}
   ${range('componentOpacity', '内容组件透明度', 0, 100, '%')}
@@ -233,15 +253,16 @@ function mountSAOSettings(container, api) {
   </fieldset>
   <fieldset>${fieldLegend('glass', '会话玻璃效果')}<div class="sao-choices sao-glass-choices">${choice('glass', 'off', '关闭', '清晰原色')}${choice('glass', 'frosted', '磨砂玻璃', '柔和模糊')}${choice('glass', 'liquid', '液态玻璃', '通透折光')}</div></fieldset>
   ${range('opacity', '表面透明度', 0, 100, '%')}
+  <p class="sao-hint">表面透明度控制对话框、菜单及浮层背景；全局窗口透明度在此基础上继续减淡。顶栏、输入框和内容组件使用各自滑杆。液态会话顶栏初始透明度 20%，按材质单独记忆。</p>
   ${range('headerOpacity', '会话顶栏透明度', 0, 100, '%')}
   <div class="sao-right-settings">
-    ${toggle('rightLinked', '右栏跟随会话', '同步会话的整面背景透明度、模糊和玻璃效果；关闭后按材质记忆独立参数。')}
+    ${toggle('rightLinked', '右栏跟随会话', '同步会话背景的透明度、模糊和玻璃效果；关闭后显示右栏独立滑杆。上下文卡片和顶栏在下方单独调节。')}
     <div data-right-controls hidden>
       <fieldset>${fieldLegend('rightGlass', '右栏玻璃效果')}<div class="sao-choices sao-glass-choices">${choice('rightGlass', 'off', '关闭', '清晰原色')}${choice('rightGlass', 'frosted', '磨砂玻璃', '柔和模糊')}${choice('rightGlass', 'liquid', '液态玻璃', '通透折光')}</div></fieldset>
       ${range('rightOpacity', '右栏背景透明度', 0, 100, '%')}
       ${range('rightBlur', '右栏背景模糊', 0, 24, 'px')}
     </div>
-    <fieldset>${fieldLegend('contextGlass', '上下文界面')}<p class="sao-hint">仅作用于右栏上下文卡片。每种材质单独记忆；液态初始透明度 20%、模糊 0px，磨砂初始透明度 35%。</p>
+    <fieldset>${fieldLegend('contextGlass', '上下文界面')}<p class="sao-hint">独立控制右栏上下文卡片，可比右栏背景更透明。每种材质单独记忆；液态初始透明度 20%、模糊 0px，磨砂初始透明度 35%。</p>
       <div class="sao-choices sao-compact-choices">${choice('contextGlass', 'follow', '跟随右栏', '')}${choice('contextGlass', 'frosted', '磨砂玻璃', '')}${choice('contextGlass', 'liquid', '液态玻璃', '')}${choice('contextGlass', 'off', '原始外观', '')}</div>
       ${range('contextOpacity', '上下文透明度', 0, 100, '%')}
       ${range('contextBlur', '上下文背景模糊', 0, 24, 'px')}
@@ -261,7 +282,7 @@ function mountSAOSettings(container, api) {
   ${range('wallScale', '画面大小', 100, 250, '%')}
   <div class="sao-actions"><button class="sao-btn" type="button" data-action="reset-transform">重置位置与大小</button></div>
 </section>
-</div><aside class="sao-preview" aria-label="外观实时预览"><div class="sao-preview-label"><span>效果预览</span><span class="sao-live">实时</span></div><div class="sao-scene"><div class="sao-scene-wall" aria-hidden="true"><img alt="" hidden></div><div class="sao-scene-conversation" aria-hidden="true"></div><div class="sao-mini" data-glass="off"><div class="sao-mini-title"><span class="sao-mini-mark" aria-hidden="true"></span><span>Link Start</span></div><div class="sao-mini-component" role="img" aria-label="内容组件背景预览"><div class="sao-mini-line"></div><div class="sao-mini-line"></div></div><div class="sao-mini-composer">输入消息…</div></div></div><div class="sao-preview-meta"><span data-preview-glass></span><span data-preview-opacity></span><span data-preview-wall></span><span data-preview-wall-opacity></span></div><p class="sao-preview-note">所有设置即时生效。</p></aside></div>
+</div><aside class="sao-preview" aria-label="外观实时预览"><div class="sao-preview-label"><span>会话效果预览</span><span class="sao-live">实时</span></div><div class="sao-scene"><div class="sao-scene-wall" aria-hidden="true"><img alt="" hidden></div><div class="sao-scene-conversation" aria-hidden="true"></div><div class="sao-mini" data-glass="off"><div class="sao-mini-surface" aria-hidden="true"></div><div class="sao-mini-title"><span class="sao-mini-mark" aria-hidden="true"></span><span>Link Start</span></div><div class="sao-mini-component" role="img" aria-label="内容组件背景预览"><div class="sao-mini-line"></div><div class="sao-mini-line"></div></div><div class="sao-mini-composer">输入消息…</div></div></div><div class="sao-preview-meta"><span data-preview-glass></span><span data-preview-opacity></span><span data-preview-wall></span><span data-preview-wall-opacity></span></div><p class="sao-preview-note">所有设置即时生效。</p></aside></div>
 <footer class="sao-footer"><p class="sao-status" role="status" aria-live="polite" aria-atomic="true" data-status></p><button class="sao-btn" type="button" data-action="reset">恢复默认设置</button></footer>`;
   container.appendChild(root);
   const find = selector => root.querySelector(selector);
@@ -463,6 +484,38 @@ function mountSAOSettings(container, api) {
       if (colorExpanded) drawColor();
     }
   }
+  // Observe only this settings component; never inspect conversation contents.
+  function syncPreview() {
+    if (disposed) return;
+    const conversation = find('.sao-scene-conversation'), mini = find('.sao-mini');
+    const surface = find('.sao-mini-surface');
+    const children = [['.sao-mini-title', prefs.headerOpacity], ['.sao-mini-composer', prefs.composerOpacity], ['.sao-mini-component', prefs.componentOpacity]];
+    const paint = (el, opacity) => {
+      const value = saoPreviewSurface(opacity, prefs.conversationBlur, prefs.glass);
+      el.style.background = 'color-mix(in srgb,var(--sao-base) ' + value.alpha * 100 + '%,transparent)';
+      el.style.backdropFilter = value.filter; el.style.webkitBackdropFilter = value.filter;
+      return value;
+    };
+    paint(conversation, prefs.conversationOpacity);
+    const value = paint(surface, prefs.opacity * prefs.windowOpacity);
+    mini.dataset.glass = prefs.glass;
+    surface.style.setProperty('--sao-preview-strength', String(value.strength));
+    mini.style.boxShadow = '0 8px 28px color-mix(in srgb,var(--sao-ink) ' + 8 * value.strength + '%,transparent)';
+    for (const [selector, opacity] of children) paint(find(selector), opacity);
+    const roundedBox = el => {
+      const box = el.getBoundingClientRect();
+      return {left:box.left, top:box.top, width:box.width, height:box.height, radius:parseFloat(doc.defaultView.getComputedStyle(el).borderTopLeftRadius) || 0};
+    };
+    const mask = (el, holes) => {
+      const image = saoPreviewHoleMask(el.getBoundingClientRect(), holes);
+      el.style.maskImage = image; el.style.webkitMaskImage = image;
+      el.style.maskMode = 'luminance'; el.style.maskSize = '100% 100%'; el.style.maskRepeat = 'no-repeat';
+      el.style.webkitMaskSize = '100% 100%'; el.style.webkitMaskRepeat = 'no-repeat';
+    };
+    // Remove both ancestor fills below each sample, rather than stacking raw alpha.
+    mask(conversation, [roundedBox(mini)]);
+    mask(surface, children.map(([selector]) => roundedBox(find(selector))));
+  }
   function sync() {
     if (disposed) return;
     surfacePicker.sync(); ensureAnimationPreviews();
@@ -503,20 +556,7 @@ function mountSAOSettings(container, api) {
     const requestedFamily = String(prefs.fontFamily || defaults.fontFamily).trim();
     const family = requestedFamily === '方正兰亭圆_准' ? 'SAO Local Rounded' : requestedFamily;
     root.style.fontFamily = '"' + family.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '",system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif';
-    const conversation = find('.sao-scene-conversation');
-    conversation.style.background = 'color-mix(in srgb,var(--sao-base) ' + Math.round(Math.max(0, Math.min(1, Number(prefs.conversationOpacity))) * 100) + '%,transparent)';
-    const conversationBlur = Math.max(0, Math.min(24, Number(prefs.conversationBlur)));
-    const blurFilter = conversationBlur > 0 ? 'blur(' + conversationBlur + 'px)' : 'none';
-    conversation.style.backdropFilter = blurFilter;
-    conversation.style.webkitBackdropFilter = conversation.style.backdropFilter;
-    const mini = find('.sao-mini');
-    mini.dataset.glass = prefs.glass;
-    mini.style.background = 'color-mix(in srgb,var(--sao-base) ' + Math.round(Math.max(0, Math.min(1, Number(prefs.opacity))) * 100) + '%,transparent)';
-    mini.style.backdropFilter = prefs.glass === 'off' ? 'none' : blurFilter;
-    mini.style.webkitBackdropFilter = mini.style.backdropFilter;
-    find('.sao-mini-title').style.background = 'color-mix(in srgb,var(--sao-base) ' + Math.round(Math.max(0, Math.min(1, Number(prefs.headerOpacity))) * 100) + '%,transparent)';
-    find('.sao-mini-composer').style.background = 'color-mix(in srgb,var(--sao-base) ' + Math.round(Math.max(0, Math.min(1, Number(prefs.composerOpacity))) * 100) + '%,transparent)';
-    find('.sao-mini-component').style.background = 'color-mix(in srgb,var(--sao-base) ' + Math.round(Math.max(0, Math.min(1, Number(prefs.componentOpacity))) * 100) + '%,transparent)';
+    syncPreview();
     const wall = wallpapers().find(item => item.id === prefs.wallpaper);
     const previewImage = find('.sao-scene-wall img');
     find('.sao-scene-wall').style.opacity = String(Math.max(0, Math.min(1, Number(prefs.wallOpacity))));
@@ -738,6 +778,8 @@ function mountSAOSettings(container, api) {
     hexDirty = false; clearHexError(); surfacePicker.reset();
     run(() => api.reset(), '正在恢复默认设置', resetButton);
   });
+  const previewResizeObserver = typeof doc.defaultView.ResizeObserver === 'function' ? new doc.defaultView.ResizeObserver(() => syncPreview()) : null;
+  for (const el of [find('.sao-scene'), find('.sao-mini'), ...all('.sao-mini-title,.sao-mini-component,.sao-mini-composer')]) previewResizeObserver?.observe(el);
   sync(); saved();
   if (typeof api.subscribe === 'function') unsubscribe = api.subscribe(() => {
     if (disposed) return;
@@ -748,6 +790,7 @@ function mountSAOSettings(container, api) {
     if (disposed) return;
     disposed = true;
     if (typeof unsubscribe === 'function') unsubscribe();
+    previewResizeObserver?.disconnect();
     surfacePicker.cleanup();
     if (activePointer !== null && canvas.hasPointerCapture(activePointer)) canvas.releasePointerCapture(activePointer);
     for (const remove of removers) remove();

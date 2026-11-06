@@ -11,20 +11,24 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
   const KEY = 'dsh-sao.preferences.v4';
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .40, liquidOpacity: .40, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .40, rightHeaderOpacity: .40, headerLinked: true, wallpaper: 'builtin-3', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
+  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
   const bounded = (v, fallback, min, max) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
   const rightSceneModes = ['off','frosted','liquid'];
   const rightSceneDefaults = mode => ({opacity: mode === 'liquid' ? .70 : .50, blur: 0});
   const contextMode = p => p.contextGlass === 'follow' ? (p.rightLinked ? p.glass : p.rightGlass) : p.contextGlass;
   const contextSceneDefaults = mode => ({opacity: mode === 'frosted' ? .65 : .80, blur: 0});
-  function contextSceneLayers(p, underlayAlpha) {
-    const continuous = contextMode(p) === 'liquid';
-    // Liquid cards sit over one continuous scene. Compensate their tint so the
-    // default 80% card above a 70% scene stays 80%, rather than becoming 94%.
-    const cardOpacity = continuous && underlayAlpha > 0 && underlayAlpha < 1
-      ? Math.max(0, (p.contextOpacity - underlayAlpha) / (1 - underlayAlpha))
-      : p.contextOpacity;
+  const headerSceneDefaults = mode => ({opacity: mode === 'liquid' ? .80 : .40, blur: 0});
+  const windowSurfaceOpacity = p => p.windowOpacity * p.opacity;
+  // Requested alpha is absolute against wallpaper. A translucent foreground
+  // cannot subtract an opaque underlay: cut only its rounded footprint when
+  // necessary. Otherwise retain the continuous scene and compensate one fill.
+  function sceneSurfaceLayers(opacity, underlayAlpha, preferContinuous = true) {
+    const continuous = preferContinuous && opacity >= underlayAlpha;
+    const cardOpacity = continuous ? (underlayAlpha < 1 ? (opacity - underlayAlpha) / (1 - underlayAlpha) : 0) : opacity;
     return {continuous, cardOpacity};
+  }
+  function contextSceneLayers(p, underlayAlpha) {
+    return sceneSurfaceLayers(p.contextOpacity, underlayAlpha, contextMode(p) !== 'off');
   }
   const ownFinite = (value, key) => Object.hasOwn(value, key) && typeof value[key] === 'number' && Number.isFinite(value[key]);
   function rememberRightScene(profiles, mode, opacity, blur, initialFor = rightSceneDefaults) {
@@ -46,6 +50,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   }
   function settingDefault(key, current) {
     if (key === 'opacity') return current.glass === 'frosted' ? defaults.frostOpacity : defaults.liquidOpacity;
+    if (key === 'headerOpacity') return headerSceneDefaults(current.glass).opacity;
     if (key === 'rightOpacity') return rightSceneDefaults(current.rightGlass).opacity;
     if (key === 'rightBlur') return rightSceneDefaults(current.rightGlass).blur;
     if (key === 'contextOpacity') return contextSceneDefaults(contextMode(current)).opacity;
@@ -86,7 +91,10 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     if (typeof p.fontFamily === 'string' && p.fontFamily.trim() && p.fontFamily.length <= 160 && !/[\x00-\x1f]/.test(p.fontFamily)) n.fontFamily = p.fontFamily.trim();
     if (['system','light','dark'].includes(p.theme)) n.theme = p.theme;
     n.opacity = bounded(p.opacity, n.glass === 'frosted' ? n.frostOpacity : n.liquidOpacity, 0, 1);
-    n.headerOpacity = bounded(p.headerOpacity, n.opacity, 0, 1);
+    n.headerSceneProfiles = normalizeRightScenes(p.headerSceneProfiles, headerSceneDefaults);
+    // Migrate the former .40 initial value; preserve other explicit legacy choices.
+    if (!Object.hasOwn(p, 'headerSceneProfiles') && ownFinite(p, 'headerOpacity') && p.headerOpacity !== .40) rememberRightScene(n.headerSceneProfiles, n.glass, bounded(p.headerOpacity, headerSceneDefaults(n.glass).opacity, 0, 1), 0, headerSceneDefaults);
+    n.headerOpacity = (n.headerSceneProfiles[n.glass] || headerSceneDefaults(n.glass)).opacity;
     n.rightHeaderOpacity = bounded(p.rightHeaderOpacity, n.headerOpacity, 0, 1);
     n.wallX = bounded(p.wallX, 50, 0, 100); n.wallY = bounded(p.wallY, 50, 0, 100); n.wallScale = bounded(p.wallScale, 100, 100, 250);
     return n;
@@ -103,14 +111,17 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const activeContextMode = contextMode(next), contextScene = contextProfiles[activeContextMode] || contextSceneDefaults(activeContextMode);
     if (ownFinite(patch, 'contextOpacity') || ownFinite(patch, 'contextBlur')) rememberRightScene(contextProfiles, activeContextMode, bounded(ownFinite(patch, 'contextOpacity') ? patch.contextOpacity : undefined, contextScene.opacity, 0, 1), bounded(ownFinite(patch, 'contextBlur') ? patch.contextBlur : undefined, contextScene.blur, 0, 24), contextSceneDefaults);
     next.contextSceneProfiles = contextProfiles;
-    if (patch.headerLinked === false && current.headerLinked) next.rightHeaderOpacity = current.headerOpacity;
+    const headerProfiles = normalizeRightScenes(next.headerSceneProfiles, headerSceneDefaults);
+    if (ownFinite(patch, 'headerOpacity')) rememberRightScene(headerProfiles, next.glass, bounded(patch.headerOpacity, headerSceneDefaults(next.glass).opacity, 0, 1), 0, headerSceneDefaults);
+    next.headerSceneProfiles = headerProfiles;
+    if (patch.headerLinked === false && current.headerLinked && !ownFinite(patch, 'rightHeaderOpacity')) next.rightHeaderOpacity = (headerProfiles[next.glass] || headerSceneDefaults(next.glass)).opacity;
     if (patch.glass && patch.glass !== current.glass && !Object.hasOwn(patch, 'opacity')) next.opacity = patch.glass === 'frosted' ? current.frostOpacity : current.liquidOpacity;
     if (Object.hasOwn(patch, 'opacity')) { if (next.glass === 'frosted') next.frostOpacity = patch.opacity; else next.liquidOpacity = patch.opacity; }
     return normalize(next);
   }
   let preferences; try { preferences = normalize(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { preferences = normalize({}); }
   let disposed = false, notice = '', tokenDispose = null, customURL = null, customName = '', queued = 0, revision = 0, uploadRevision = 0;
-  const subscribers = new Set(), panelDisposers = new Set(), touched = new Set(), componentTouched = new Set();
+  const subscribers = new Set(), panelDisposers = new Set(), touched = new Set(), componentTouched = new Set(), adaptiveObserved = new Set();
   const style = document.createElement('style'); style.dataset.saoAppearance = '4'; document.head.append(style);
   const background = document.createElement('div'); background.dataset.saoWallpaper = ''; background.setAttribute('aria-hidden','true');
   background.style.cssText = 'position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1';
@@ -129,7 +140,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   let lastStyle = '', lastWallpaperCSS = '';
   const backdropStyles = new WeakMap(), contextTouched = new Set();
   const rightPaneSelector = '[data-sidebar-right-session] div[data-sidebar-right-tab]';
-  // Current core 0.2.1-rc.5 has no browser-root data attribute while idle.
+  // Verified core 0.2.1-rc.5 and Desktop 0.2.2-rc.1 have no idle browser-root data attribute.
   // Its source-proven root class covers that state; the public carrier
   // attribute also recognizes iframe/webview states without reading URLs.
   const browserRootSelector = '.bZwPEG_root,[data-sidebar-browser-frame]';
@@ -176,7 +187,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
       while (pending.length) {
         const child=pending.shift();
         if (!(child instanceof HTMLElement) || child.matches('style,script,iframe,canvas,video')) continue;
-        if (child.hasAttribute('data-slot') || getComputedStyle(child).display==='contents') pending.push(...child.children);
+        if (child.hasAttribute('data-slot') || child.hasAttribute('data-dsh-native-tab-host') || getComputedStyle(child).display==='contents') pending.push(...child.children);
         else roots.add(child);
       }
     }
@@ -191,7 +202,8 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   const contextCardSelector = contextRootSelector + ' .lc-card';
   const isContextCard = el => el.matches(contextCardSelector) && !el.parentElement?.closest('.lc-card');
   const contextCardsObserved = new Set(), contextViewportsObserved = new Set();
-  let contextCardPaths = [];
+  let contextCardPaths = [], conversationSurfacePaths = [], rightSurfacePaths = [];
+  const materialBorders = css => [css.borderTopWidth,css.borderRightWidth,css.borderBottomWidth,css.borderLeftWidth].map(value => parseFloat(value));
   // Clip rounded card footprints to their visible scroll viewport. The mask
   // remains in the gutters, while each card still paints once over wallpaper.
   function clippedCardPolygon(rect, clip, corners) {
@@ -261,19 +273,25 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     return mode === 'push' && !!main && !!right && main.width>0 && main.height>0 && right.width>0 && right.height>0 && Math.abs(main.x+main.width-right.x)<=8 && Math.abs(main.y-right.y)<=1 && Math.abs(main.height-right.height)<=1;
   }
   const rightScene = () => ({opacity: preferences.rightLinked ? preferences.conversationOpacity : preferences.rightOpacity, blur: preferences.rightLinked ? preferences.conversationBlur : preferences.rightBlur});
+  function sceneHoleMask(box, holes) {
+    if (!holes.length) return 'none';
+    const polygons = holes.map(points => `<polygon points="${points.map(([x,y])=>`${(x-box.x).toFixed(2)},${(y-box.y).toFixed(2)}`).join(' ')}"/>`).join('');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}" viewBox="0 0 ${box.width} ${box.height}"><rect width="100%" height="100%" fill="white"/><g fill="black">${polygons}</g></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  }
   // Each column owns one scene mask; liquid context cards layer above it.
   function paintBackdrop(element, box, opacity, blur, radius = '0px', corner = 'round', material = 'off') {
     // A single fill owns the right scene. Frost adds diffusion; liquid adds an
     // edge-only optical canvas so an explicitly blurred center stays blurred.
-    const diffusion = material === 'frosted' && opacity > 0 ? Math.max(12, blur) : blur;
+    const diffusion = opacity === 0 ? 0 : material === 'frosted' ? Math.max(12, blur) : blur;
     element.hidden = !box || opacity === 0 && diffusion === 0 || element === rightBackdrop && onlyBrowserRight;
     if (element === rightBackdrop && element.getAttribute('data-sao-scene-material') !== material) element.setAttribute('data-sao-scene-material',material);
     if (!box) return;
-    // Liquid keeps the ENTIRE scene behind the cards, including their bevels
-    // and rounded corners. Frost retains its independent single-fill cards.
-    const holes = element === rightBackdrop ? [...browserCardPaths,...(!contextSceneLayers(preferences, opacity).continuous ? contextCardPaths : [])] : [];
-    const path = holes.length ? `M0 0H${box.width}V${box.height}H0Z ` + holes.map(points => points.map(([x,y],i)=>`${i?'L':'M'}${(x-box.x).toFixed(2)} ${(y-box.y).toFixed(2)}`).join(' ')+'Z').join(' ') : '';
-    const css = `position:absolute;left:${box.x-bounds.x}px;top:${box.y-bounds.y}px;width:${box.width}px;height:${box.height}px;pointer-events:none;border-radius:${element === rightBackdrop ? (rightJoined ? '0 0 16px 0' : '16px 0 16px 16px') : radius + ' 0 0 0'};corner-shape:${corner};isolation:isolate;overflow:hidden;clip-path:${path ? `path(evenodd,"${path}")` : 'none'};--sao-edge-strength:${4*opacity*(1-opacity)};background:rgb(${sceneColor().map(v=>v*255).join(' ')} / ${opacity});backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'};-webkit-backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'}`;
+    // Both materials retain the continuous scene when the target permits it.
+    // Only clearer cards replace their actual fill footprint; Browser remains native.
+    const holes = element === rightBackdrop ? [...browserCardPaths,...rightSurfacePaths,...(!contextSceneLayers(preferences, opacity).continuous ? contextCardPaths : [])] : conversationSurfacePaths;
+    const mask = sceneHoleMask(box,holes);
+    const css = `position:absolute;left:${box.x-bounds.x}px;top:${box.y-bounds.y}px;width:${box.width}px;height:${box.height}px;pointer-events:none;border-radius:${element === rightBackdrop ? (rightJoined ? '0 0 16px 0' : '16px 0 16px 16px') : radius + ' 0 0 0'};corner-shape:${corner};isolation:isolate;overflow:hidden;mask-image:${mask};mask-mode:luminance;mask-repeat:no-repeat;mask-size:100% 100%;--sao-edge-strength:${4*opacity*(1-opacity)};background:rgb(${sceneColor().map(v=>v*255).join(' ')} / ${opacity});backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'};-webkit-backdrop-filter:${diffusion ? `blur(${diffusion}px)` : 'none'}`;
     if (backdropStyles.get(element) !== css) { element.style.cssText = css; backdropStyles.set(element,css); }
   }
   const writeStyle = () => { if (style.textContent !== lastStyle) style.textContent = lastStyle; };
@@ -283,18 +301,30 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     while (el && getComputedStyle(el).display === 'contents') el = el.parentElement;
     return el;
   }
+  // Resolve topology, not a fixed parent count: MainPanel may add real boxes
+  // between the conversation outlet and the center/right shared AppFrame.
+  function sceneLayoutRoots(mainChain, rightChain) {
+    const index = mainChain.findIndex((node,i) => i>0 && rightChain.includes(node));
+    return {frame:mainChain[index>0?index:1] || null,column:mainChain[index>0?index-1:0] || null};
+  }
+  const ancestors = node => { const chain=[]; for(;node;node=node.parentElement) chain.push(node); return chain; };
   function layoutWallpaper() {
     const outlet = document.querySelector('[data-slot="main.conversation"]');
-    const column = boxFor(outlet?.parentElement || outlet);
-    const frame = column?.parentElement;
+    const mainBody = boxFor(outlet?.parentElement || outlet);
+    const right = boxFor(document.querySelector('[data-slot="rightbar"]')?.parentElement);
+    const {column,frame} = sceneLayoutRoots(ancestors(mainBody),ancestors(right));
     if (!outlet || !column || !frame) { background.remove(); return; }
-    if (frame !== frameHost) {
+    const frameChanged = frame !== frameHost;
+    if (frameChanged) {
       frameHost?.removeAttribute('data-sao-wall-frame');
       frameHost?.removeAttribute('data-sao-wall-positioned');
       frameHost = frame; frameHost.setAttribute('data-sao-wall-frame','');
       if (getComputedStyle(frameHost).position === 'static') frameHost.setAttribute('data-sao-wall-positioned','');
     }
-    for (const [el, attr] of [[frame,'data-sao-shell'],[column,'data-sao-shell-center'],[boxFor(document.querySelector('[data-slot="sidebar"]')?.parentElement),'data-sao-shell-sidebar']]) if (el && !el.hasAttribute(attr)) { el.setAttribute(attr,''); shellTouched.add(el); }
+    const shellMarks = [[frame,'data-sao-shell'],[column,'data-sao-shell-center'],[boxFor(document.querySelector('[data-slot="sidebar"]')?.parentElement),'data-sao-shell-sidebar']];
+    for (const node of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) if (!shellMarks.some(([el,key])=>el===node&&key===attr)) node.removeAttribute(attr);
+    shellTouched.clear();
+    for (const [el,attr] of shellMarks) if (el) { if (!el.hasAttribute(attr)) el.setAttribute(attr,''); shellTouched.add(el); }
     const c = column.getBoundingClientRect(), f = frame.getBoundingClientRect();
     // A collapsed 56px tool rail does not crop the wallpaper's full-window cover.
     const x = c.left - f.left <= 64 ? f.left : c.left;
@@ -307,7 +337,6 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     paintBackdrop(conversationBackdrop, conversationBounds, preferences.conversationOpacity, preferences.conversationBlur, radius, corner);
     if (background.parentElement !== frame) frame.prepend(background);
     if (!column.hasAttribute('data-sao-wall-column')) column.setAttribute('data-sao-wall-column',''); layoutTouched.add(column);
-    const right = boxFor(document.querySelector('[data-slot="rightbar"]')?.parentElement);
     const r = right?.getBoundingClientRect();
     rightBounds = r && r.width > 0 && r.height > 0 ? {x:r.left,y:r.top,width:r.width,height:r.height} : null;
     updateRightPanes();
@@ -324,11 +353,23 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     paintBackdrop(rightBackdrop, rightBounds, scene.opacity, scene.blur, '16px', 'round', preferences.rightLinked ? preferences.glass : preferences.rightGlass);
     for (const el of layoutTouched) if (el !== column && el !== right) { el.removeAttribute('data-sao-wall-column'); el.removeAttribute('data-sao-wall-right'); el.removeAttribute('data-sao-main-joined'); el.removeAttribute('data-sao-right-joined'); layoutTouched.delete(el); }
     if (right) { if (onlyBrowserRight) right.setAttribute('data-sao-browser-only',''); else right.removeAttribute('data-sao-browser-only'); if (!right.hasAttribute('data-sao-wall-column')) right.setAttribute('data-sao-wall-column',''); if (!right.hasAttribute('data-sao-wall-right')) right.setAttribute('data-sao-wall-right',''); layoutTouched.add(right); }
-    if (wallHost !== column || observedRight !== right) { resizeObserver?.disconnect(); resizeObserver?.observe(column); resizeObserver?.observe(frame); if (right) resizeObserver?.observe(right); wallHost = column; observedRight = right; }
+    if (frameChanged || wallHost !== column || observedRight !== right) { resizeObserver?.disconnect(); resizeObserver?.observe(column); resizeObserver?.observe(frame); if (right) resizeObserver?.observe(right); wallHost = column; observedRight = right; }
     for (const node of rightPanesObserved) resizeObserver?.observe(node);
     for (const root of contextTouched) resizeObserver?.observe(root);
     for (const card of contextCardsObserved) resizeObserver?.observe(card);
     for (const viewport of contextViewportsObserved) resizeObserver?.observe(viewport);
+    for (const host of adaptiveObserved) resizeObserver?.observe(host);
+  }
+  function sceneSurfacePolygon(el,box) {
+    const r=el.getBoundingClientRect(), css=getComputedStyle(el);
+    const clip={left:box.x,top:box.y,right:box.x+box.width,bottom:box.y+box.height};
+    for(let parent=el.parentElement;parent&&parent!==frameHost;parent=parent.parentElement){
+      const style=getComputedStyle(parent), rect=parent.getBoundingClientRect();
+      if(/^(auto|scroll|hidden|clip)$/.test(style.overflowX)){clip.left=Math.max(clip.left,rect.left+parent.clientLeft);clip.right=Math.min(clip.right,rect.left+parent.clientLeft+parent.clientWidth);}
+      if(/^(auto|scroll|hidden|clip)$/.test(style.overflowY)){clip.top=Math.max(clip.top,rect.top+parent.clientTop);clip.bottom=Math.min(clip.bottom,rect.top+parent.clientTop+parent.clientHeight);}
+    }
+    const pair=value=>{const values=value.trim().split(/\s+/);return [values[0],values[1]||values[0]].map((v,i)=>parseFloat(v)*(v.endsWith('%')?(i?r.height:r.width)/100:1));};
+    return clippedCardPolygon({x:r.x,y:r.y,width:r.width,height:r.height},clip,[css.borderTopLeftRadius,css.borderTopRightRadius,css.borderBottomRightRadius,css.borderBottomLeftRadius].map(pair));
   }
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
     if (disposed || !frameHost) return;
@@ -340,7 +381,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   // Only known core surfaces; SlotOutlet itself uses display:contents.
   const rightHeaderSelector = '[data-rightbar-col] [data-sidebar-right-panel] [data-dockkit-strip]';
   const rightBodySelector = '[data-rightbar-col] [data-sidebar-right-panel] [data-dockkit-host="dock"] > [data-dockkit-content] > div:has(>[data-dockkit-strip]) + div';
-  const componentSelector = '[data-changed-files],[data-presented-file],[data-team-panel],[data-testid="todo-panel"],section[data-turn-trigger],[data-menu-material]:has(>ul[aria-label="后台任务"]),[data-menu-material]:has(>ul[aria-label="Background jobs"])';
+  const componentSelector = '[data-changed-files],[data-presented-file],[data-team-panel],[data-testid="todo-panel"],section[data-turn-trigger],[data-menu-material]:has(>ul[aria-label="后台任务"]),[data-menu-material]:has(>ul[aria-label="Background jobs"]),' + saoBetterSidebarSelectors().components;
   const surfaceSelectors = [
     '[data-slot="conversation.header"] > header',
     '[data-slot="rightbar.session"] > *',
@@ -380,7 +421,18 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     }
     accentCSS = declarations.length ? `body{${declarations.join(';')}}` : '';
   }
+  // A failed material pass must remain observable without taking down settings.
+  const runtimeState = {build:'desktop-dialog-surface-opacity-20261106',passes:0,error:null};
   function sync() {
+    if (disposed) return;
+    try { syncAppearance(); runtimeState.passes++; runtimeState.error = null; }
+    catch (error) {
+      const failure = {name:String(error?.name || 'Error'),message:String(error?.message || error).slice(0,320)};
+      if (runtimeState.error?.message !== failure.message) console.error('dsh-SAO material pass failed',error);
+      runtimeState.error = failure;
+    }
+  }
+  function syncAppearance() {
     if (disposed) return;
     const p = preferences, source = p.wallpaper === 'custom' ? customURL : builtins.find(x => x.id === p.wallpaper)?.src;
     if (source !== loadedSource) {
@@ -394,7 +446,12 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     background.style.background = 'var(--dsw-alias-bg-base,#f4f6f9)';
     const rightGlass = p.rightLinked ? p.glass : p.rightGlass, rightOpacity = rightScene().opacity, rightBlur = rightScene().blur;
     const contextGlass = contextMode(p), contextLayers = contextSceneLayers(p, rightOpacity);
-    const glass = p.glass !== 'off' || rightGlass !== 'off' || contextGlass !== 'off', alpha = p.opacity, blur = p.conversationBlur;
+    const headerLayers = sceneSurfaceLayers(p.headerOpacity,p.conversationOpacity), composerLayers = sceneSurfaceLayers(p.composerOpacity,p.conversationOpacity);
+    const rightHeaderAlpha = p.headerLinked ? p.headerOpacity : p.rightHeaderOpacity;
+    const rightHeaderLayers = sceneSurfaceLayers(rightHeaderAlpha,rightOpacity), rightComposerLayers = sceneSurfaceLayers(p.composerOpacity,rightOpacity);
+    const componentMainLayers = sceneSurfaceLayers(p.componentOpacity,p.conversationOpacity), componentRightLayers = sceneSurfaceLayers(p.componentOpacity,rightOpacity);
+    const filter = (opacity, blur, frost = false) => opacity > 0 ? (blur || frost ? `blur(${frost ? Math.max(12,blur) : blur}px)` : 'none') : 'none';
+    const glass = p.glass !== 'off' || rightGlass !== 'off' || contextGlass !== 'off', alpha = p.opacity, blur = p.conversationBlur, windowAlpha = windowSurfaceOpacity(p);
     const materialBase = 'var(--dsw-alias-bg-base,#f4f6f9)';
     lastStyle = `${accentCSS}
 @font-face{font-family:"SAO Local Rounded";src:local("方正兰亭圆_准"),local("方正兰亭圆_GBK_准"),local("FZLanTingYuan-M-GBK");font-display:swap;font-weight:400}
@@ -416,38 +473,39 @@ ${background.parentElement ? `[data-sao-wall-frame]{isolation:isolate}[data-sao-
 [data-sao-right-joined] [data-sidebar-right-panel="push"] [data-dockkit-host="dock"][data-dockkit-column="0"] > [data-dockkit-content]:not([data-sao-browser-pane]){border-left:0!important;border-top-left-radius:0!important}
 /* Browser panes keep their native opaque base and chrome, including in splits. */
 [data-sao-browser-only],[data-sao-wall-right] [data-sao-browser-pane]{background:var(--dsw-alias-bg-base,#f4f6f9)!important}
-[data-sao-material]{isolation:isolate;corner-shape:round!important;--sao-material-base:color-mix(in srgb,${materialBase} 97%,var(--dsw-alias-brand-primary) 3%);--sao-surface-alpha:${Math.round(alpha*100)}%;--sao-surface-blur:${blur}px;--sao-surface-filter:${blur ? `blur(${blur}px) saturate(1.05)` : 'none'};border-color:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+[data-sao-material]{isolation:isolate;corner-shape:round!important;--sao-material-base:color-mix(in srgb,${materialBase} 97%,var(--dsw-alias-brand-primary) 3%);--sao-surface-alpha:${Math.round(alpha*100)}%;--sao-surface-blur:${blur}px;--sao-surface-filter:${filter(alpha,blur)};--sao-frost-filter:${filter(alpha,blur,true)};--sao-optical-strength:${4*alpha*(1-alpha)};border-color:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 [data-sao-zone="right"]{--sao-surface-alpha:${Math.round(rightOpacity*100)}%;--sao-surface-blur:0px;--sao-surface-filter:none}
-[data-sao-zone="context"]{--sao-surface-alpha:${Math.round(contextLayers.cardOpacity*100)}%;--sao-surface-blur:${p.contextBlur}px;--sao-surface-filter:${p.contextBlur ? `blur(${p.contextBlur}px)` : 'none'}}
-[data-sao-zone="composer"]{--sao-surface-alpha:${Math.round(p.composerOpacity*100)}%}
-[data-sao-zone="header"]{--sao-surface-alpha:${Math.round(p.headerOpacity*100)}%}
-[data-sao-zone="header-right"]{--sao-surface-alpha:${Math.round((p.headerLinked?p.headerOpacity:p.rightHeaderOpacity)*100)}%;--sao-surface-blur:${rightBlur}px;--sao-surface-filter:${rightBlur ? `blur(${rightBlur}px) saturate(1.05)` : 'none'}}
-[data-sao-zone="window"]{--sao-surface-alpha:${Math.round(p.windowOpacity*100)}%;--sao-surface-blur:0px;--sao-surface-filter:none;color:var(--dsw-alias-label-primary)!important}
+[data-sao-zone="context"]{--sao-surface-alpha:${contextLayers.cardOpacity*100}%;--sao-surface-filter:${filter(p.contextOpacity,p.contextBlur)};--sao-frost-filter:${filter(p.contextOpacity,p.contextBlur,true)};--sao-optical-strength:${4*p.contextOpacity*(1-p.contextOpacity)}}
+[data-sao-zone="composer"]{--sao-surface-alpha:${composerLayers.cardOpacity*100}%;--sao-surface-filter:${filter(p.composerOpacity,blur)};--sao-frost-filter:${filter(p.composerOpacity,blur,true)};--sao-optical-strength:${4*p.composerOpacity*(1-p.composerOpacity)}}
+[data-sao-wall-right] [data-sao-zone="composer"]{--sao-surface-alpha:${rightComposerLayers.cardOpacity*100}%;--sao-surface-filter:${filter(p.composerOpacity,rightBlur)};--sao-frost-filter:${filter(p.composerOpacity,rightBlur,true)}}
+[data-sao-zone="header"]{--sao-surface-alpha:${headerLayers.cardOpacity*100}%;--sao-surface-filter:${filter(p.headerOpacity,blur)};--sao-frost-filter:${filter(p.headerOpacity,blur,true)};--sao-optical-strength:${4*p.headerOpacity*(1-p.headerOpacity)}}
+[data-sao-zone="header-right"]{--sao-surface-alpha:${rightHeaderLayers.cardOpacity*100}%;--sao-surface-filter:${filter(rightHeaderAlpha,rightBlur)};--sao-frost-filter:${filter(rightHeaderAlpha,rightBlur,true)};--sao-optical-strength:${4*rightHeaderAlpha*(1-rightHeaderAlpha)}}
+[data-sao-zone="window"]{--sao-surface-alpha:${windowAlpha*100}%;--sao-surface-filter:none;--sao-frost-filter:${filter(windowAlpha,0,true)};--sao-optical-strength:${4*windowAlpha*(1-windowAlpha)};color:var(--dsw-alias-label-primary)!important}
 body:has([data-menu-material][data-sao-material]) [data-menu-backing],
 [data-menu-material][data-sao-material]>div[aria-hidden="true"]{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 [role="tooltip"]{--dsw-alias-tooltip-key-bg:transparent!important;--dsw-alias-tooltip-key-label:var(--dsw-alias-label-primary)!important}
 [role="tooltip"] kbd,[role="tooltip"] kbd::before,[role="tooltip"] kbd::after{background:transparent!important;box-shadow:none!important;text-shadow:none!important;color:inherit!important}
-[data-sao-component]{background:color-mix(in srgb,${materialBase} ${Math.round(p.componentOpacity*100)}%,transparent)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;--changes-fill:transparent!important;--deliverable-fill:transparent!important;--dsw-alias-bg-layer-2:transparent!important}
-section[data-turn-trigger][data-sao-component]{--dsw-alias-turn-trigger-bg:color-mix(in srgb,${materialBase} ${Math.round(p.componentOpacity*100)}%,transparent);--dsw-alias-turn-trigger-bg-hover:color-mix(in srgb,${materialBase} ${Math.max(0,Math.round(p.componentOpacity*100)-5)}%,transparent)}
+[data-sao-component]{--sao-component-alpha:${p.componentOpacity*100}%;background:color-mix(in srgb,${materialBase} var(--sao-component-alpha),transparent)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;--changes-fill:transparent!important;--deliverable-fill:transparent!important;--dsw-alias-bg-layer-2:transparent!important}
+section[data-turn-trigger][data-sao-component]{--dsw-alias-turn-trigger-bg:color-mix(in srgb,${materialBase} var(--sao-component-alpha),transparent);--dsw-alias-turn-trigger-bg-hover:color-mix(in srgb,${materialBase} max(0%,calc(var(--sao-component-alpha) - 5%)),transparent)}
 section[data-turn-trigger][data-sao-component]:hover{background:var(--dsw-alias-turn-trigger-bg-hover)!important}
 /* Context-owned local hooks keep nested controls translucent without
    * touching global theme layers, chart hues or duration contrast halos. */
-[data-sao-context]{--lc-canvas:transparent!important;--lc-subpanel-bg:color-mix(in srgb,${materialBase} 8%,transparent)!important;--lc-control-track:color-mix(in srgb,${materialBase} 10%,transparent)!important;background:transparent!important}
+[data-sao-context]{--lc-canvas:transparent!important;--lc-subpanel-bg:color-mix(in srgb,${materialBase} ${8*Math.min(1,p.contextOpacity/.8)}%,transparent)!important;--lc-control-track:color-mix(in srgb,${materialBase} ${10*Math.min(1,p.contextOpacity/.8)}%,transparent)!important;background:transparent!important}
 [data-sao-context] .lc-card .lc-card{background:var(--lc-subpanel-bg)!important;box-shadow:none!important}
 [data-sao-context] :is(.lc-stat,.lc-cmd-kpi){background:var(--lc-subpanel-bg)!important}
 [data-sao-context] :is(.lc-chart-tip,.lc-tip){background:color-mix(in srgb,${materialBase} 92%,transparent)!important}
 /* Share the goal strip's one native menu layer across the ENTIRE task shell. */
 section[data-testid="todo-panel"][data-sao-component]{position:relative;isolation:isolate;--dsw-alias-bg-layer-2:inherit!important;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-radius:var(--dsw-radius-md);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);box-shadow:var(--dsw-elevation-panel);border:0}
-section[data-testid="todo-panel"][data-sao-component]::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:color-mix(in srgb,var(--dsw-specific-menu) ${Math.round(p.componentOpacity*100)}%,transparent);backdrop-filter:var(--dsw-menu-backdrop-filter);-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter)}
-[data-team-panel][data-sao-component]{background:transparent!important;--dsw-specific-menu:color-mix(in srgb,${materialBase} ${Math.round(p.componentOpacity*100)}%,transparent)!important}
+section[data-testid="todo-panel"][data-sao-component]::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:color-mix(in srgb,${materialBase} var(--sao-component-alpha),transparent);backdrop-filter:${p.componentOpacity>0?'var(--dsw-menu-backdrop-filter)':'none'};-webkit-backdrop-filter:${p.componentOpacity>0?'var(--dsw-menu-backdrop-filter)':'none'}}
+[data-team-panel][data-sao-component]{background:transparent!important;--dsw-specific-menu:color-mix(in srgb,${materialBase} var(--sao-component-alpha),transparent)!important}
 [data-team-panel][data-sao-component]::before{background:var(--dsw-specific-menu)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 [data-menu-material][data-sao-component]>div[aria-hidden="true"]{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 [data-menu-material][data-sao-component] [data-terminal]{--dsw-alias-markdown-code-block:transparent!important;background:transparent!important}
 [data-sao-material][data-sao-positioned]{position:relative}
-[data-sao-surface="floating"]{border-radius:16px!important;box-shadow:0 10px 32px color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 8%,transparent)!important}
+[data-sao-surface="floating"]{border-radius:16px!important;box-shadow:0 10px 32px color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) calc(8% * var(--sao-optical-strength)),transparent)!important}
 [data-sao-surface="joined"]{border:0!important;border-radius:0!important}
 html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockkit-column="0"] > [data-sao-surface="joined"]{border-top-left-radius:var(--dsh-windows-content-radius,16px)!important}
-[data-sao-material]::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;corner-shape:inherit;z-index:-1;background:color-mix(in srgb,var(--sao-material-base,#f4f6f9) var(--sao-surface-alpha),transparent);backdrop-filter:var(--sao-surface-filter,none);-webkit-backdrop-filter:var(--sao-surface-filter,none);border:0;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 9%,transparent)}
+[data-sao-material]::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;corner-shape:inherit;z-index:-1;background:color-mix(in srgb,var(--sao-material-base,#f4f6f9) var(--sao-surface-alpha),transparent);backdrop-filter:var(--sao-surface-filter,none);-webkit-backdrop-filter:var(--sao-surface-filter,none);border:0;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) calc(9% * var(--sao-optical-strength)),transparent)}
 [data-sao-surface="joined"]::before{box-shadow:none}
 [role="dialog"][data-shortcut-modal="settings"]{--dsw-alias-settings-card-fill:transparent;border-radius:28px!important;border-color:color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 9%,transparent)!important}
 [role="dialog"][data-shortcut-modal="settings"] :is(button[aria-label="关闭"],button[aria-label="Close"]){border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 2%,transparent);color:var(--dsw-alias-label-primary);border-color:transparent}
@@ -457,7 +515,12 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
 [data-sao-material]>[data-sao-liquid]{z-index:-1!important;border-radius:inherit;corner-shape:inherit;background:transparent;box-shadow:none;border:0}
 /* Keep the readable base; the GPU canvas is a lightweight optical overlay. */
 [data-sao-material="liquid"]:has(>[data-sao-liquid]:not([hidden]))::before{backdrop-filter:none;-webkit-backdrop-filter:none}
-[data-sao-material="frosted"]{background:transparent!important;--sao-surface-filter:blur(max(12px,var(--sao-surface-blur,0px))) saturate(.95)}
+/* Paint frost on the same border box as its replacement hole. The inset:0
+ * pseudo-element starts inside the transparent host border and would leave a
+ * clear ring if it owned the fill. Keep it only for the existing inset stroke.
+ * No border widths, layout, liquid canvases or requested alpha are changed. */
+[data-sao-material="frosted"][data-sao-zone][data-sao-surface]{background:color-mix(in srgb,var(--sao-material-base,#f4f6f9) var(--sao-surface-alpha),transparent)!important;background-clip:border-box!important;backdrop-filter:var(--sao-frost-filter,none)!important;-webkit-backdrop-filter:var(--sao-frost-filter,none)!important}
+[data-sao-material="frosted"]::before{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 [data-sao-right-backdrop] > [data-sao-liquid]{position:absolute;inset:0;z-index:1!important;border-radius:inherit;pointer-events:none}
 [data-sao-right-backdrop]::after{content:"";position:absolute;inset:0;z-index:2;border-radius:inherit;pointer-events:none;opacity:var(--sao-edge-strength,0)}
 [data-sao-scene-material="liquid"]::after{box-shadow:inset 0 0 0 1px rgb(255 255 255 / .48),inset 2px 2px 5px rgb(255 255 255 / .25),inset -2px -2px 6px rgb(15 35 55 / .14);background:linear-gradient(135deg,rgb(255 255 255 / .14),transparent 22%,transparent 78%,rgb(20 45 70 / .06))}
@@ -465,8 +528,9 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
 [data-sao-right-backdrop][data-sao-joined-left][data-sao-scene-material="liquid"]::after{box-shadow:inset 0 1px 0 rgb(255 255 255 / .48),inset -1px 0 0 rgb(255 255 255 / .48),inset 0 -1px 0 rgb(255 255 255 / .48)}
 [data-sao-right-backdrop][data-sao-joined-left][data-sao-scene-material="frosted"]::after{box-shadow:inset 0 1px 0 color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent),inset -1px 0 0 color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--dsw-alias-label-primary) 10%,transparent)}
 [data-sao-scene-material="off"]::after{display:none}
-[data-sao-material="liquid"]{background:transparent!important}
+[data-sao-material="liquid"][data-sao-zone][data-sao-surface]{background:transparent!important}
 @media(prefers-reduced-motion:reduce){[data-sao-material]{transition:none}}
+${saoBetterSidebarCSS(materialBase)}
 `;
     writeStyle();
     const isWindow = el => el.matches(windowSelector);
@@ -478,25 +542,73 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
     const surfaces = glass ? chooseSurfaces().filter(el => surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el) || isComposer(el) || isContextCard(el))) : [];
     // Include orphaned markers from earlier clients, not only nodes owned by this instance.
     let contextShapeChanged = false;
-    for (const el of new Set([...touched,...document.querySelectorAll('[data-sao-material]')])) if (!surfaces.includes(el)) { if (isContextCard(el)) contextShapeChanged = true; for (const attr of materialAttributes) el.removeAttribute(attr); touched.delete(el); }
+    for (const el of new Set([...touched,...document.querySelectorAll('[data-sao-material]')])) if (!surfaces.includes(el)) { if (isContextCard(el)) contextShapeChanged = true; for (const attr of materialAttributes) el.removeAttribute(attr); el.style.removeProperty('--sao-surface-alpha'); touched.delete(el); }
     for (const el of surfaces) {
       if (!el.hasAttribute('data-sao-material') && getComputedStyle(el).position === 'static') el.setAttribute('data-sao-positioned','');
       if (el.getAttribute('data-sao-material') !== surfaceMode(el)) el.setAttribute('data-sao-material', surfaceMode(el));
       const zone = isContextCard(el) ? 'context' : isWindow(el) ? 'window' : isRightHeader(el) ? 'header-right' : isHeader(el) ? 'header' : isComposer(el) ? 'composer' : isRight(el) ? 'right' : 'conversation'; if (el.getAttribute('data-sao-zone') !== zone) el.setAttribute('data-sao-zone', zone);
+      if (zone !== 'conversation' && el.style.getPropertyValue('--sao-surface-alpha')) el.style.removeProperty('--sao-surface-alpha');
       const type = (isHeader(el) || isRightHeader(el) || el.matches(rightBodySelector) || el.matches('[data-dockkit-content],[data-dockkit-empty],[data-sidebar-right-panel]')) ? 'joined' : 'floating'; if (el.getAttribute('data-sao-surface') !== type) { if (isContextCard(el)) contextShapeChanged = true; el.setAttribute('data-sao-surface', type); }
       touched.add(el);
     }
-    if (contextShapeChanged) { updateContextRoots(); paintBackdrop(rightBackdrop,rightBounds,rightOpacity,rightBlur,'16px','round',rightGlass); }
+    if (contextShapeChanged) updateContextRoots();
+    // Geometry follows native layout; no reparenting or content reads. These
+    // adaptive footprints let headers and inputs be clearer than their scene.
+    conversationSurfacePaths = []; rightSurfacePaths = [];
+    const surfaceLayers = new Map(), adaptiveHosts = new Set();
+    for (const el of surfaces) {
+      // Portals blend over the actual page below, which may include other
+      // cards or a modal scrim. Their alpha is local: never cut a hole in an
+      // unrelated scene or change material underneath an overlapping window.
+      if (isWindow(el)) continue;
+      const right = isRight(el), box = right ? rightBounds : conversationBounds;
+      const layers = isContextCard(el) ? contextLayers : isRightHeader(el) ? rightHeaderLayers : isHeader(el) ? headerLayers : isComposer(el) ? (right ? rightComposerLayers : composerLayers) : sceneSurfaceLayers(p.opacity,right ? rightOpacity : p.conversationOpacity);
+      if (!layers || !box) continue;
+      surfaceLayers.set(el,layers);
+      if (el.getAttribute('data-sao-zone') === 'conversation') { const alpha=layers.cardOpacity*100+'%'; if(el.style.getPropertyValue('--sao-surface-alpha')!==alpha) el.style.setProperty('--sao-surface-alpha',alpha); }
+      if (layers.continuous || isContextCard(el)) continue;
+      adaptiveHosts.add(el);
+      const polygon = sceneSurfacePolygon(el,box);
+      if (polygon.length>=3) (right ? rightSurfacePaths : conversationSurfacePaths).push(polygon);
+    }
+    const radius = wallHost ? getComputedStyle(wallHost).borderTopLeftRadius : '0px';
     const components = [...document.querySelectorAll(componentSelector)].filter(el => !el.closest('[data-sao-browser-pane]') && !el.hasAttribute('data-sao-right-root'));
-    for (const el of componentTouched) if (!components.includes(el)) { el.removeAttribute('data-sao-component'); componentTouched.delete(el); }
+    for (const el of componentTouched) if (!components.includes(el)) { el.removeAttribute('data-sao-component'); el.style.removeProperty('--sao-component-alpha'); componentTouched.delete(el); }
     for (const el of components) { if (!el.hasAttribute('data-sao-component')) el.setAttribute('data-sao-component',''); componentTouched.add(el); }
+    for (const el of components) {
+      const nestedComponent = el.parentElement?.closest('[data-sao-component]');
+      const bottomHost = el.closest('[data-dsh-bottom-panel]'), rect = bottomHost?.getBoundingClientRect(), c = conversationBounds;
+      // A graph node may pan beyond its clipping viewport. Scene ownership
+      // follows the bottom portal host, while sceneSurfacePolygon clips the node.
+      const bottomOnScene = !!rect && rect.width>0 && rect.height>0 && rect.left>=c.x-1 && rect.top>=c.y-1 && rect.right<=c.x+c.width+1 && rect.bottom<=c.y+c.height+1;
+      const onScene = !el.closest(windowSelector) && !nestedComponent && (!!el.closest('[data-slot="main.conversation"],[data-sao-wall-right]') || bottomOnScene);
+      const right = isRight(el), layers = right ? componentRightLayers : componentMainLayers;
+      // One target shared by nested neutral components, without stacking it twice.
+      const alpha = `${(nestedComponent ? 0 : onScene ? layers.cardOpacity : p.componentOpacity)*100}%`;
+      if(el.style.getPropertyValue('--sao-component-alpha')!==alpha) el.style.setProperty('--sao-component-alpha',alpha);
+      if (onScene && !layers.continuous) {
+        adaptiveHosts.add(el);
+        const box = right ? rightBounds : conversationBounds;
+        if (box) { const polygon = sceneSurfacePolygon(el,box); if(polygon.length>=3) (right ? rightSurfacePaths : conversationSurfacePaths).push(polygon); }
+      }
+    }
+    // Track local size changes and clipping viewports, not just column bounds.
+    for(const host of [...adaptiveHosts]) for(let parent=host.parentElement;parent&&parent!==frameHost;parent=parent.parentElement){
+      const css=getComputedStyle(parent);
+      if(/^(auto|scroll|hidden|clip)$/.test(css.overflowX)||/^(auto|scroll|hidden|clip)$/.test(css.overflowY)) adaptiveHosts.add(parent);
+    }
+    const retainedObservation = host => host===wallHost||host===frameHost||host===observedRight||rightPanesObserved.has(host)||contextTouched.has(host)||contextCardsObserved.has(host)||contextViewportsObserved.has(host);
+    for(const host of adaptiveObserved) if(!adaptiveHosts.has(host)){if(!retainedObservation(host)) resizeObserver?.unobserve(host);adaptiveObserved.delete(host);}
+    for(const host of adaptiveHosts) if(!adaptiveObserved.has(host)){resizeObserver?.observe(host);adaptiveObserved.add(host);}
+    paintBackdrop(conversationBackdrop,conversationBounds,p.conversationOpacity,p.conversationBlur,radius);
+    paintBackdrop(rightBackdrop,rightBounds,rightOpacity,rightBlur,'16px','round',rightGlass);
     const isConversationSurface = el => !isRight(el) && !isWindow(el);
     // Nonzero background blur uses the CSS backdrop path rather than a costly or mismatched GPU approximation.
     const liquidSurfaces = surfaces.filter(el => surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
     if (rightGlass === 'liquid' && rightBounds && !rightBackdrop.hidden) liquidSurfaces.unshift(rightBackdrop);
     // Card bevels refract the continuous scene rather than sampling untouched
     // wallpaper through it. This prevents a clear ring around a tinted card.
-    const surfaceBackgrounds = new Map(liquidSurfaces.filter(el => el !== rightBackdrop && (isConversationSurface(el) || isRight(el) && rightBounds)).map(el => [el,{opacity:isRight(el) ? rightOpacity : p.conversationOpacity,color:sceneColor(),bounds:isRight(el) ? rightBounds : conversationBounds}]));
+    const surfaceBackgrounds = new Map(liquidSurfaces.filter(el => el !== rightBackdrop && (isConversationSurface(el) || isRight(el) && rightBounds)).map(el => [el,{opacity:surfaceLayers.get(el)?.continuous === false ? 0 : isRight(el) ? rightOpacity : p.conversationOpacity,color:sceneColor(),bounds:isRight(el) ? rightBounds : conversationBounds}]));
     // Open the two optical edges at the join as well: removing a CSS border
     // alone would leave a refracted vertical bevel between the columns.
     const surfaceOpenEdges = new Map();
@@ -504,19 +616,22 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
       if (host === rightBackdrop || isRightHeader(host) && host.closest('[data-dockkit-host="dock"][data-dockkit-column="0"]')) surfaceOpenEdges.set(host,{left:true});
       else if (isHeader(host)) surfaceOpenEdges.set(host,{right:true});
     }
-    liquid.update({ surfaceOpenEdges, enabled: liquidSurfaces.length > 0, surfaces: liquidSurfaces, edgeOnlySurfaces: new Set([rightBackdrop,...liquidSurfaces.filter(el => isContextCard(el) && (p.contextBlur > 0 || rightBlur > 0 || rightGlass === 'frosted'))]), surfaceOpacities: new Map(liquidSurfaces.map(el => [el, el === rightBackdrop ? rightOpacity : isContextCard(el) ? contextLayers.cardOpacity : isWindow(el) ? p.windowOpacity : isRightHeader(el) ? (p.headerLinked?p.headerOpacity:p.rightHeaderOpacity) : isHeader(el) ? p.headerOpacity : isComposer(el) ? p.composerOpacity : isRight(el) ? rightOpacity : p.opacity])), surfaceBackgrounds, baseColor:baseColor(), image: imageReady ? image : null, position: { x: p.wallX, y: p.wallY, scale: p.wallScale }, bounds, wallOpacity: p.wallOpacity, opacity: p.opacity });
+    liquid.update({ surfaceOpenEdges, enabled: liquidSurfaces.length > 0, surfaces: liquidSurfaces, edgeOnlySurfaces: new Set([rightBackdrop,...liquidSurfaces.filter(el => isContextCard(el) && (p.contextBlur > 0 || rightBlur > 0 || rightGlass === 'frosted'))]), surfaceOpacities: new Map(liquidSurfaces.map(el => [el, el === rightBackdrop ? rightOpacity : surfaceLayers.has(el) ? surfaceLayers.get(el).cardOpacity : isWindow(el) ? windowAlpha : isRightHeader(el) ? (p.headerLinked?p.headerOpacity:p.rightHeaderOpacity) : isHeader(el) ? p.headerOpacity : isComposer(el) ? p.composerOpacity : isRight(el) ? rightOpacity : p.opacity])), surfaceBackgrounds, baseColor:baseColor(), image: imageReady ? image : null, position: { x: p.wallX, y: p.wallY, scale: p.wallScale }, bounds, wallOpacity: p.wallOpacity, opacity: p.opacity });
   }
   image.onload = () => { imageReady = true; schedule(); };
   image.onerror = () => { imageReady = false; notice = '壁纸载入失败，请重新选择或上传'; notify(); };
   function schedule() { if (!disposed && !document.hidden && !queued) queued = requestAnimationFrame(() => { queued = 0; sync(); }); }
   const structure = '[data-slot],[data-dockkit-content],[data-dockkit-empty],[data-dockkit-strip],[data-sidebar-right-panel],[data-sao-material],' + windowSelector + ',' + componentSelector + ',' + contextRootSelector + ',' + contextCardSelector + ',' + rightPaneSelector + ',' + browserRootSelector;
   const observer = new MutationObserver(records => {
-    if (records.some(r => r.type === 'attributes' ? r.target.matches?.(windowSelector + ',' + contextRootSelector + ',[data-dockkit-content],[data-dockkit-host],[data-sidebar-right-session],[data-sidebar-right-panel],' + rightPaneSelector + ',' + browserRootSelector) && (!['style','class'].includes(r.attributeName) || !touched.has(r.target)) : r.type === 'childList' && [...r.addedNodes,...r.removedNodes].some(n => n.nodeType === 1 && !n.matches?.('[data-sao-liquid],[data-sao-wallpaper]') && (r.target.closest?.(rightPaneSelector) || n.matches?.(structure) || n.firstElementChild && n.querySelector?.(structure))))) schedule();
+    if (records.some(r => {
+      if (r.type === 'attributes') return (!!r.target.closest?.('[data-dsh-native-tab-host],[data-dsh-bottom-panel]') || r.target.matches?.(windowSelector + ',' + contextRootSelector + ',[data-dockkit-content],[data-dockkit-host],[data-sidebar-right-session],[data-sidebar-right-panel],' + rightPaneSelector + ',' + browserRootSelector)) && (!['style','class'].includes(r.attributeName) || !touched.has(r.target));
+      return r.type === 'childList' && [...r.addedNodes,...r.removedNodes].some(n => n.nodeType === 1 && !n.matches?.('[data-sao-liquid],[data-sao-wallpaper]') && (r.target.closest?.(rightPaneSelector) || n.matches?.(structure) || n.firstElementChild && n.querySelector?.(structure)));
+    })) schedule();
   });
   observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
   const onStorage = event => { if (event.key === KEY) { try { preferences = normalize(JSON.parse(event.newValue || '{}')); applyTokens(); sync(); notify(); } catch {} } };
   window.addEventListener('storage', onStorage);
-  const onContextScroll = event => { if (event.target instanceof Element && (event.target.closest(contextRootSelector) || [...contextTouched].some(root => event.target.contains(root)))) schedule(); };
+  const onContextScroll = event => { if (event.target instanceof Element && (event.target.closest('[data-sao-wall-column]') || event.target.closest(contextRootSelector) || [...contextTouched].some(root => event.target.contains(root)))) schedule(); };
   document.addEventListener('scroll',onContextScroll,{capture:true,passive:true});
   const onVisibility = () => { if (document.hidden) { cancelAnimationFrame(queued); queued = 0; } else schedule(); };
   document.addEventListener('visibilitychange', onVisibility);
@@ -582,7 +697,7 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
     } catch (error) { if (preferences.wallpaper === 'custom') storageNotice(error); }
   }
   const api = {
-    get: () => ({ ...preferences, rightSceneProfiles: normalizeRightScenes(preferences.rightSceneProfiles), contextSceneProfiles: normalizeRightScenes(preferences.contextSceneProfiles, contextSceneDefaults) }), status: () => notice,
+    get: () => ({ ...preferences, rightSceneProfiles: normalizeRightScenes(preferences.rightSceneProfiles), contextSceneProfiles: normalizeRightScenes(preferences.contextSceneProfiles, contextSceneDefaults), headerSceneProfiles: normalizeRightScenes(preferences.headerSceneProfiles, headerSceneDefaults) }), status: () => notice,
     getDefault: key => Object.hasOwn(defaults, key) ? settingDefault(key, preferences) : undefined,
     get animationPreviews() { return animationPreviews; },
     get wallpapers() { return [...builtins, ...(customURL ? [{id:'custom',name:customName,src:customURL}] : [])]; },
@@ -630,19 +745,44 @@ html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockki
   window[instanceKey] = controller;
   ctx.effect(() => dispose, 'dsh-SAO appearance');
   ctx.slots.inject('settings.section', () => ctx.slots.register({name:'settings.section',id:'dsh-sao',order:35,label:()=> 'dsh-SAO'}, Settings));
+  // Optional read-only inspection on the already connected page. No content,
+  // URLs, Browser descendants, local storage or session identifiers are returned.
+  ctx.inject(['cordisInspect'], scope => scope.effect(() => scope.get('cordisInspect').register({
+    manifest:{id:'SAOAppearance',description:'Read-only SAO material application status on the connected page; counts, geometry and computed surface styles only.',methods:[{name:'snapshot',description:'Read SAO build marker, last material error, layer geometry and bounded right-pane background styles.',inputSchema:{type:'object',properties:{},additionalProperties:false},outputSchema:{type:'object',additionalProperties:true}}]},
+    query(method) {
+      if(method!=='snapshot') throw Error('Unknown SAO inspection method');
+      const measure = el => {
+        if(!el) return null;
+        const css=getComputedStyle(el), r=el.getBoundingClientRect();
+        return {tag:el.tagName.toLowerCase(),markers:[...el.attributes].map(a=>a.name).filter(name=>/^(data-(sao|slot|rightbar|sidebar-right|dockkit|dsh-native))/.test(name)),box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)},display:css.display,visibility:css.visibility,background:css.backgroundColor,opacity:css.opacity,position:css.position,zIndex:css.zIndex,overflowX:css.overflowX,overflowY:css.overflowY,material:el.getAttribute('data-sao-material')||el.getAttribute('data-sao-scene-material'),zone:el.getAttribute('data-sao-zone'),borderWidths:materialBorders(css),componentAlpha:css.getPropertyValue('--sao-component-alpha').trim(),surfaceAlpha:css.getPropertyValue('--sao-surface-alpha').trim(),filter:css.backdropFilter,mask:css.maskImage==='none'?'none':'present',before:{background:getComputedStyle(el,'::before').backgroundColor,filter:getComputedStyle(el,'::before').backdropFilter,radius:getComputedStyle(el,'::before').borderTopLeftRadius,exists:!['none','normal'].includes(getComputedStyle(el,'::before').content)}};
+      };
+      const selectors={headers:'[data-sao-zone="header"]',windows:'[data-sao-zone="window"]',dialogs:'[role="dialog"]',conversationBackdrop:'[data-sao-conversation-backdrop]',main:'[data-slot="main.conversation"]',right:'[data-slot="rightbar"]',columns:'[data-rightbar-col]',panels:'[data-sidebar-right-panel]',panes:rightPaneSelector,context:contextRootSelector,cards:contextCardSelector,frame:'[data-sao-wall-frame]',center:'[data-sao-shell-center]',wallpaper:'[data-sao-wallpaper]',rightBackdrop:'[data-sao-right-backdrop]',wallRight:'[data-sao-wall-right]',managed:'[data-sao-right-root]',better:'[data-dsh-native-tab-host]',betterBottom:'[data-dsh-bottom-panel]',betterComponents:saoBetterSidebarSelectors().components};
+      const nodes=Object.fromEntries(Object.entries(selectors).map(([key,selector])=>{const found=[...document.querySelectorAll(selector)];return [key,{count:found.length,samples:found.slice(0,3).map(measure)}];}));
+      const chain=selector=>{const result=[];let node=document.querySelector(selector);for(let i=0;node&&i<7;i++,node=node.parentElement)result.push(measure(node));return result;};
+      let cssRules=null;try{cssRules=style.sheet?.cssRules.length??null;}catch{}
+      const modules=ctx.get('modules'), state=modules?.entries?.state?.getSnapshot?.(), change=modules?.entries?.releaseChange?.getSnapshot?.();
+      const release=value=>value?{version:value.version,commit:value.commit}:null;
+      const ownIds=['@local/dsh-sao-skin','@local/dsh-sao-market'];
+      const moduleStatus={pageRelease:release(modules?.manifest?.release),ownRows:(modules?.manifest?.modules||[]).filter(row=>ownIds.includes(row.id)).map(row=>({id:row.id,rev:row.rev})),syncing:state?.syncing??null,failureCount:state?.failures?.length??null,ownFailures:(state?.failures||[]).filter(row=>ownIds.includes(row.id)).map(row=>({id:row.id,message:String(row.message).slice(0,240)})),announcedReleaseChange:change?{page:release(change.page),previous:release(change.previous),host:release(change.host)}:null};
+      const betterAdapter = {selectorSupported:CSS.supports('selector(:is('+saoBetterSidebarSelectors().components+'))'),neutralRulePresent:[...(style.sheet?.cssRules||[])].some(rule=>!!rule.style?.getPropertyValue('--sao-bs-neutral-fill'))};
+      const scene=rightScene(),context=contextSceneLayers(preferences,scene.opacity);
+      const layerPlan={rightMaterial:preferences.rightLinked?preferences.glass:preferences.rightGlass,contextMaterial:contextMode(preferences),rightAlpha:scene.opacity,contextAlpha:preferences.contextOpacity,contextContinuous:context.continuous,contextLocalAlpha:context.cardOpacity,contextReplacementHoles:context.continuous?0:contextCardPaths.length,adaptiveRightHoles:rightSurfacePaths.length,browserHoles:browserCardPaths.length,frostedReplacementBox:'border-box'};
+      return {surfaceSettings:{glass:preferences.glass,surfaceAlpha:preferences.opacity,windowAlpha:preferences.windowOpacity,effectiveWindowAlpha:windowSurfaceOpacity(preferences),headerAlpha:preferences.headerOpacity,headerDefault:headerSceneDefaults(preferences.glass).opacity,conversationAlpha:preferences.conversationOpacity},moduleStatus,betterAdapter,layerPlan,build:runtimeState.build,passes:runtimeState.passes,error:runtimeState.error,disposed,hidden:document.hidden,stylesheet:{connected:style.isConnected,rules:cssRules,characters:style.textContent.length},wallpaper:{connected:background.isConnected,imageReady},bounds:{scene:bounds,conversation:conversationBounds,right:rightBounds},onlyBrowserRight,rightJoined,nodes,mainAncestors:chain(selectors.main),rightAncestors:chain(selectors.right)};
+    }
+  }),'dsh-SAO read-only material inspection'));
   applyTokens(); sync(); loadCustom();
   function dispose() {
     if (disposed) return; disposed = true; uploadRevision++;
-    cancelAnimationFrame(queued); observer.disconnect(); resizeObserver?.disconnect(); contextCardsObserved.clear(); contextViewportsObserved.clear(); for (const [nodes,attribute] of [[rightPanesTouched,'data-sao-right-pane'],[rightRootsTouched,'data-sao-right-root'],[browserPanesTouched,'data-sao-browser-pane']]) { for (const node of nodes) node.removeAttribute(attribute); nodes.clear(); } rightPanesObserved.clear(); document.removeEventListener('scroll',onContextScroll,true); window.removeEventListener('storage',onStorage); document.removeEventListener('visibilitychange',onVisibility);
+    cancelAnimationFrame(queued); observer.disconnect(); resizeObserver?.disconnect(); adaptiveObserved.clear(); contextCardsObserved.clear(); contextViewportsObserved.clear(); for (const [nodes,attribute] of [[rightPanesTouched,'data-sao-right-pane'],[rightRootsTouched,'data-sao-right-root'],[browserPanesTouched,'data-sao-browser-pane']]) { for (const node of nodes) node.removeAttribute(attribute); nodes.clear(); } rightPanesObserved.clear(); document.removeEventListener('scroll',onContextScroll,true); window.removeEventListener('storage',onStorage); document.removeEventListener('visibilitychange',onVisibility);
     themeTransition?.skipTransition?.(); themeAnimation?.cancel(); themeTransitionStyle?.remove();
     frameHost?.removeAttribute('data-sao-wall-frame'); frameHost?.removeAttribute('data-sao-wall-positioned');
     for (const el of layoutTouched) { el.removeAttribute('data-sao-wall-column'); el.removeAttribute('data-sao-wall-right'); el.removeAttribute('data-sao-browser-only'); el.removeAttribute('data-sao-main-joined'); el.removeAttribute('data-sao-right-joined'); } layoutTouched.clear();
     for (const el of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) el.removeAttribute(attr); shellTouched.clear();
-    for (const el of componentTouched) el.removeAttribute('data-sao-component'); componentTouched.clear();
+    for (const el of componentTouched) { el.removeAttribute('data-sao-component'); el.style.removeProperty('--sao-component-alpha'); } componentTouched.clear();
     for (const el of contextTouched) el.removeAttribute('data-sao-context'); contextTouched.clear();
     tokenDispose?.(); liquid.dispose(); style.remove(); background.remove(); image.onload = image.onerror = null;
     if (customURL) URL.revokeObjectURL(customURL); for (const cleanup of panelDisposers) cleanup(); panelDisposers.clear(); subscribers.clear();
-    for (const el of touched) { el.removeAttribute('data-sao-material'); el.removeAttribute('data-sao-positioned'); el.removeAttribute('data-sao-surface'); el.removeAttribute('data-sao-zone'); } touched.clear();
+    for (const el of touched) { el.style.removeProperty('--sao-surface-alpha'); el.removeAttribute('data-sao-material'); el.removeAttribute('data-sao-positioned'); el.removeAttribute('data-sao-surface'); el.removeAttribute('data-sao-zone'); } touched.clear();
     window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();
     if (window[instanceKey] === controller) delete window[instanceKey];
   }

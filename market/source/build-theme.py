@@ -19,7 +19,7 @@ for ident, name in [('1', 'native'), ('2', 'thin')]:
     previews.append({'id': ident, 'src': 'data:image/webp;base64,' + base64.b64encode(data).decode('ascii')})
 startup = (root / 'startup.js').read_text(encoding='utf-8')
 settings = (root / 'source' / 'settings-panel.js').read_text(encoding='utf-8')
-runtime = '\n'.join((root / 'source' / name).read_text(encoding='utf-8') for name in ['liquid-glass.js', 'appearance.js', 'model-intensity.js'])
+runtime = '\n'.join((root / 'source' / name).read_text(encoding='utf-8') for name in ['liquid-glass.js', 'better-sidebar.js', 'appearance.js', 'model-intensity.js'])
 
 targets = [(root, root_manifest['name'])]
 if not standalone_market:
