@@ -21,7 +21,7 @@ function mountSAOSettings(container, api) {
   'use strict';
   const doc = container.ownerDocument;
   const uid = 'sao-settings-' + Math.random().toString(36).slice(2, 10);
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.80, headerOpacity: 0.80, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.80, wallpaper: 'builtin-3', wallpaperScope: 'full', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
+  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.80, headerOpacity: 0.80, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.80, wallpaper: 'builtin-3', wallpaperScope: 'full', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
   let prefs = Object.assign({}, defaults, api.get());
   let disposed = false, unsubscribe = null, pending = 0, operation = 0;
   let hue = 0, saturation = 0.8, brightness = 1, colorExpanded = false, hexDirty = false;
@@ -32,7 +32,7 @@ function mountSAOSettings(container, api) {
   root.setAttribute('lang', 'zh-CN');
   const style = doc.createElement('style');
   style.textContent = `
-[data-sao-settings]{--sao-ink:var(--dsw-alias-label-primary,CanvasText);--sao-muted:var(--dsw-alias-label-secondary,GrayText);--sao-base:var(--dsw-alias-bg-base,Canvas);--sao-surface:color-mix(in srgb,var(--sao-ink) 3%,transparent);--sao-line:color-mix(in srgb,var(--sao-ink) 9%,transparent);--sao-radius-surface:22px;--sao-radius-control:14px;--sao-accent:var(--dsw-alias-brand-primary,Highlight);--sao-on-accent:var(--dsw-alias-label-on-brand,HighlightText);--sao-soft:color-mix(in srgb,var(--sao-accent) 8%,transparent);--sao-mark:var(--sao-accent);--sao-selected-line:color-mix(in srgb,var(--sao-accent) 65%,transparent);--sao-track:var(--sao-accent);--sao-mark-edge:color-mix(in srgb,var(--sao-on-accent) 55%,transparent);--sao-focus:color-mix(in srgb,var(--sao-accent) 35%,var(--sao-ink));color:var(--sao-ink);background:transparent;font:400 14px/1.6 var(--sao-font,system-ui),-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;padding:24px;box-sizing:border-box;min-width:0;max-width:1100px;margin-inline:auto;isolation:isolate}
+[data-sao-settings]{--sao-ink:var(--dsw-alias-label-primary,CanvasText);--sao-base:var(--dsw-alias-bg-base,Canvas);--sao-glass-base:color-mix(in srgb,var(--sao-base) 86%,var(--sao-accent) 14%);--sao-muted:color-mix(in srgb,var(--sao-ink) 88%,var(--sao-base));--sao-surface:color-mix(in srgb,var(--sao-glass-base) 14%,transparent);--sao-line:color-mix(in srgb,var(--sao-ink) 12%,transparent);--sao-edge:color-mix(in srgb,var(--sao-base) 48%,var(--sao-ink) 16%);--sao-glint:color-mix(in srgb,var(--sao-base) 55%,var(--sao-ink) 7%);--sao-radius-surface:22px;--sao-radius-control:16px;--sao-accent:var(--dsw-alias-brand-primary,Highlight);--sao-on-accent:var(--dsw-alias-label-on-brand,HighlightText);--sao-soft:color-mix(in srgb,var(--sao-accent) 9%,var(--sao-glass-base) 10%);--sao-hover:color-mix(in srgb,var(--sao-glass-base) 22%,transparent);--sao-pressed:color-mix(in srgb,var(--sao-ink) 8%,var(--sao-glass-base) 16%);--sao-active-ink:var(--sao-ink);--sao-mark:color-mix(in srgb,var(--sao-accent) 65%,var(--sao-ink));--sao-selected-line:var(--sao-line);--sao-track:color-mix(in srgb,var(--sao-accent) 60%,var(--sao-ink) 15%);--sao-mark-edge:var(--sao-line);--sao-focus:color-mix(in srgb,var(--sao-ink) 65%,var(--sao-base));color:var(--sao-ink);background:color-mix(in srgb,var(--sao-glass-base) 54%,transparent);border:1px solid var(--sao-edge);border-radius:28px;backdrop-filter:blur(24px) saturate(145%);-webkit-backdrop-filter:blur(24px) saturate(145%);box-shadow:inset 0 1px 0 var(--sao-glint),0 18px 52px color-mix(in srgb,var(--sao-ink) 10%,transparent);font:400 14px/1.6 var(--sao-font,system-ui),-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;padding:24px;box-sizing:border-box;min-width:0;max-width:1100px;margin-inline:auto;isolation:isolate}
 [data-sao-settings] *,[data-sao-settings] *::before,[data-sao-settings] *::after{box-sizing:border-box}
 [data-sao-settings] [hidden]{display:none!important}
 [data-sao-settings] h2,[data-sao-settings] h3,[data-sao-settings] p{margin:0}
@@ -41,47 +41,57 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] button{cursor:pointer}
 [data-sao-settings] button:disabled,[data-sao-settings] input:disabled{cursor:wait;opacity:.58}
 [data-sao-settings] [data-pref=rightHeaderOpacity]:disabled{cursor:not-allowed}
-[data-sao-settings] :is(button,input,select,canvas):focus-visible{outline:3px solid var(--sao-focus);outline-offset:3px;box-shadow:0 0 0 2px var(--sao-base)}
+[data-sao-settings] :is(button,input,select,canvas):focus-visible{outline:2px solid var(--sao-focus);outline-offset:3px}
 [data-sao-settings] .sao-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px}
-[data-sao-settings] h2{font-size:23px;line-height:1.4;font-weight:500}
-[data-sao-settings] .sao-tabs{display:flex;gap:6px;border-bottom:1px solid var(--sao-line);margin-bottom:24px}
-[data-sao-settings] .sao-tab{position:relative;min-height:46px;padding:9px 18px;border:1px solid transparent;border-radius:var(--sao-radius-control);background:transparent;color:var(--sao-muted);font-weight:400}
-[data-sao-settings] .sao-tab:hover{background:var(--sao-soft);color:var(--sao-ink)}
-[data-sao-settings] .sao-tab[aria-selected=true]{color:var(--sao-ink);background:var(--sao-soft);border-color:var(--sao-selected-line)}
-[data-sao-settings] .sao-tab[aria-selected=true]::after{content:"";position:absolute;bottom:3px;left:calc(50% - 2px);width:4px;height:4px;border-radius:50%;background:var(--sao-mark)}
+[data-sao-settings] h2{font-size:22px;line-height:1.4;font-weight:600}
+[data-sao-settings] .sao-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;margin-bottom:28px}
+[data-sao-settings] .sao-tab{position:relative;min-height:44px;padding:9px 18px;border:0;border-radius:999px;background:transparent;box-shadow:none;color:var(--sao-muted);font-weight:500;transition:background-color .15s,color .15s}
+[data-sao-settings] .sao-tab:hover{background:var(--sao-hover);color:var(--sao-ink)}
+[data-sao-settings] .sao-tab:active{background:var(--sao-pressed)}
+[data-sao-settings] .sao-tab[aria-selected=true]{color:var(--sao-active-ink);background:var(--sao-soft);font-weight:600;box-shadow:inset 0 0 0 1px var(--sao-line),inset 0 1px 0 var(--sao-glint)}
 [data-sao-settings] .sao-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,260px);gap:28px;align-items:start}
 [data-sao-settings] .sao-main{min-width:0;container-type:inline-size;container-name:sao-settings-main}
-[data-sao-settings] .sao-section-head{margin-bottom:20px}
-[data-sao-settings] h3{font-size:16px;font-weight:500}
-[data-sao-settings] .sao-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px;padding:15px 0;border-bottom:1px solid var(--sao-line)}
+[data-sao-settings] .sao-section-head{margin-bottom:20px;padding:0;border:0}
+[data-sao-settings] h3{font-size:16px;font-weight:600}
+[data-sao-settings] .sao-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px;padding:12px 0;border:0;background:transparent;box-shadow:none}
 [data-sao-settings] .sao-row:first-of-type{padding-top:0}
 [data-sao-settings] .sao-row-copy{min-width:0;flex:1 1 160px}
 [data-sao-settings] .sao-row-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;margin-inline-start:auto}
 [data-sao-settings] .sao-field-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;width:100%}
 [data-sao-settings] .sao-reset{flex:0 0 auto;min-height:36px;margin-inline-start:auto;padding:6px 8px;border:1px solid transparent;border-radius:var(--sao-radius-control);background:transparent;color:var(--sao-muted);font-size:12px;font-weight:400;white-space:nowrap}
-[data-sao-settings] .sao-reset:hover{background:var(--sao-soft);color:var(--sao-ink)}
+[data-sao-settings] .sao-reset:hover{background:var(--sao-hover);color:var(--sao-active-ink)}
+[data-sao-settings] :is(.sao-btn,.sao-reset):active:not(:disabled){background:var(--sao-pressed)}
 [data-sao-settings] .sao-right-settings{margin-top:24px}
-[data-sao-settings] .sao-row-title{display:block;font-weight:400}
+[data-sao-settings] .sao-row-title{display:block;font-weight:500}
 [data-sao-settings] .sao-hint{display:block;color:var(--sao-muted);font-size:12px;line-height:1.6;margin-top:3px}
 [data-sao-settings] .sao-switch{position:relative;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;min-width:48px;min-height:44px}
 [data-sao-settings] .sao-switch input{position:absolute;opacity:0;width:44px;height:28px;margin:0;cursor:pointer}
-[data-sao-settings] .sao-switch-track{width:44px;height:26px;border-radius:999px;corner-shape:round!important;background:var(--sao-line);pointer-events:none;position:relative;border:1px solid var(--sao-line);transition:background .15s,border-color .15s}
-[data-sao-settings] .sao-switch-track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;corner-shape:round!important;background:var(--sao-muted);transition:transform .15s,background .15s}
-[data-sao-settings] .sao-switch input:checked + span{background:var(--sao-soft);border-color:var(--sao-selected-line)}
-[data-sao-settings] .sao-switch input:checked + span::after{transform:translateX(18px);background:var(--sao-mark);box-shadow:0 0 0 1px var(--sao-mark-edge)}
-[data-sao-settings] .sao-switch input:focus-visible + span{outline:3px solid var(--sao-focus);outline-offset:4px;box-shadow:0 0 0 3px var(--sao-base)}
-[data-sao-settings] fieldset{border:0;padding:0;margin:22px 0;min-width:0}
-[data-sao-settings] legend{padding:0;margin-bottom:10px;font-weight:400;width:100%;max-width:100%}
+[data-sao-settings] .sao-switch-track{width:44px;height:26px;border-radius:999px;corner-shape:round!important;background:color-mix(in srgb,var(--sao-ink) 30%,var(--sao-base));pointer-events:none;position:relative;border:1px solid transparent;transition:background .15s,border-color .15s}
+[data-sao-settings] .sao-switch-track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;corner-shape:round!important;background:var(--sao-base);transition:transform .15s,background .15s}
+[data-sao-settings] .sao-switch input:checked + span{background:var(--sao-mark);border-color:var(--sao-mark)}
+[data-sao-settings] .sao-switch input:checked + span::after{transform:translateX(18px);background:var(--sao-base)}
+[data-sao-settings] .sao-switch input:focus-visible + span{outline:2px solid var(--sao-focus);outline-offset:4px}
+[data-sao-settings] fieldset{border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:color-mix(in srgb,var(--sao-glass-base) 12%,transparent);box-shadow:inset 0 1px 0 var(--sao-glint);padding:16px;margin:20px 0;min-width:0}
+[data-sao-settings] legend{float:left;padding:0;margin-bottom:12px;font-weight:600;width:100%;max-width:100%}
+/* One glass shell, quiet grouped surfaces and neutral hairlines. The host may own the outer shell. */
+[data-sao-settings] fieldset > legend + *{clear:both}
+[data-sao-settings] fieldset::after{content:"";display:table;clear:both}
+[data-sao-settings] .sao-font{padding:16px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:color-mix(in srgb,var(--sao-glass-base) 12%,transparent);box-shadow:inset 0 1px 0 var(--sao-glint)}
+[data-sao-settings] .sao-feature-mode{margin:0 0 24px}
+[data-sao-settings] .sao-mode-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-width:420px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+[data-sao-settings] .sao-mode-tabs .sao-choice > span{min-height:44px}
 [data-sao-settings] .sao-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 [data-sao-settings] .sao-choice{position:relative;min-width:0;cursor:pointer}
-[data-sao-settings] .sao-choice > input{position:absolute;appearance:none;width:18px;height:18px;top:14px;left:12px;margin:0;border:1px solid var(--sao-muted);border-radius:50%;background:var(--sao-surface);z-index:1;cursor:pointer}
-[data-sao-settings] .sao-choice > input:checked{background:var(--sao-mark);border-color:var(--sao-mark);box-shadow:inset 0 0 0 4px var(--sao-base),0 0 0 1px var(--sao-mark-edge)}
-[data-sao-settings] .sao-choice > span{display:block;min-height:68px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:var(--sao-surface);padding:11px 10px 11px 38px;font-size:13px}
-[data-sao-settings] .sao-choice input:checked + span{border-color:var(--sao-selected-line);background:var(--sao-soft);color:var(--sao-ink)}
-[data-sao-settings] .sao-choice:hover > span{border-color:var(--sao-selected-line)}
-[data-sao-settings] .sao-choice input:focus-visible + span{outline:3px solid var(--sao-focus);outline-offset:3px;box-shadow:0 0 0 2px var(--sao-base)}
-[data-sao-settings] .sao-choice strong{display:block;font-weight:400}
-[data-sao-settings] .sao-choice small{display:block;font-size:11px;color:var(--sao-muted);margin-top:3px}
+[data-sao-settings] .sao-choice > input{position:absolute;appearance:none;width:12px;height:12px;top:18px;left:14px;margin:0;border:1px solid color-mix(in srgb,var(--sao-ink) 28%,transparent);border-radius:4px;background:color-mix(in srgb,var(--sao-glass-base) 10%,transparent);box-shadow:none;z-index:1;cursor:pointer}
+[data-sao-settings] .sao-choice > input:checked::after{content:"";position:absolute;width:6px;height:3px;left:2px;top:2px;border-bottom:1.5px solid var(--sao-base);border-left:1.5px solid var(--sao-base);transform:rotate(-45deg)}
+[data-sao-settings] .sao-choice > input:checked{background:color-mix(in srgb,var(--sao-ink) 80%,transparent);border-color:transparent;box-shadow:none}
+[data-sao-settings] .sao-choice > span{display:block;min-height:68px;border:1px solid transparent;border-radius:var(--sao-radius-control);background:color-mix(in srgb,var(--sao-glass-base) 6%,transparent);box-shadow:none;padding:11px 10px 11px 34px;font-size:13px;transition:background-color .15s,border-color .15s}
+[data-sao-settings] .sao-choice input:checked + span{border-color:var(--sao-line);background:var(--sao-soft);color:var(--sao-ink);box-shadow:inset 0 1px 0 var(--sao-glint)}
+[data-sao-settings] .sao-choice:hover > span{background:var(--sao-hover)}
+[data-sao-settings] .sao-choice:active > span{background:var(--sao-pressed)}
+[data-sao-settings] .sao-choice input:focus-visible + span{outline:2px solid var(--sao-focus);outline-offset:3px}
+[data-sao-settings] .sao-choice strong{display:block;font-weight:500}
+[data-sao-settings] .sao-choice small{display:block;font-size:12px;color:var(--sao-muted);margin-top:3px}
 [data-sao-settings] .sao-choice input:checked + span small{color:inherit}
 [data-sao-settings] .sao-animation-choices .sao-choice > span{padding:11px 10px;min-height:68px}
 [data-sao-settings] .sao-animation-choices strong,[data-sao-settings] .sao-animation-choices small{padding-left:28px}
@@ -89,43 +99,43 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-compact-choices{display:flex;flex-wrap:wrap;gap:8px}
 [data-sao-settings] .sao-compact-choices .sao-choice{flex:1 1 120px}
 [data-sao-settings] .sao-compact-choices .sao-choice > span{display:flex;align-items:center;gap:6px;height:40px;min-height:40px;padding:8px 12px 8px 36px;border-radius:999px;corner-shape:round!important;line-height:22px;white-space:nowrap}
-[data-sao-settings] .sao-compact-choices .sao-choice > input{top:11px;left:12px}
+[data-sao-settings] .sao-compact-choices .sao-choice > input{top:14px;left:13px}
 [data-sao-settings] .sao-compact-choices .sao-choice strong{overflow:hidden;text-overflow:ellipsis}
 [data-sao-settings] .sao-switch-track,[data-sao-settings] .sao-choice > input,[data-sao-settings] .sao-tab::after{corner-shape:round!important}
-[data-sao-settings] .sao-btn{min-height:44px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:var(--sao-surface);color:var(--sao-ink);padding:8px 14px;font-weight:400;font-size:13px;transition:background .15s,border-color .15s}
-[data-sao-settings] .sao-btn:hover{background:var(--sao-soft);border-color:var(--sao-selected-line)}
-[data-sao-settings] .sao-btn-primary{background:var(--sao-soft);color:var(--sao-ink);border-color:var(--sao-selected-line)}
-[data-sao-settings] .sao-btn-primary:hover{background:color-mix(in srgb,var(--sao-accent) 12%,transparent)}
+[data-sao-settings] .sao-btn{min-height:44px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:var(--sao-surface);color:var(--sao-ink);padding:8px 14px;font-weight:400;font-size:13px;box-shadow:inset 0 1px 0 var(--sao-glint);transition:background .15s,border-color .15s}
+[data-sao-settings] .sao-btn:hover{background:var(--sao-hover);border-color:var(--sao-line)}
+[data-sao-settings] .sao-btn-primary{background:var(--sao-soft);color:var(--sao-ink);border-color:var(--sao-line)}
+[data-sao-settings] .sao-btn-primary:hover{background:var(--sao-hover)}
 [data-sao-settings] .sao-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:20px}
 [data-sao-settings] .sao-font-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0}
 [data-sao-settings] .sao-font-row input{flex:1 1 180px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:var(--sao-surface)}
 [data-sao-settings] .sao-theme-choices{grid-template-columns:repeat(3,minmax(0,1fr))}
 [data-sao-settings] .sao-theme-choices .sao-choice > span{min-height:48px}
-[data-sao-settings] .sao-range-row{display:grid;grid-template-columns:minmax(0,9em) minmax(80px,1fr) 4ch max-content;grid-template-areas:"label slider value reset";align-items:center;gap:0 10px;margin-top:8px;padding:4px 10px;border:1px solid var(--sao-line);border-radius:8px;background:var(--sao-surface)}
+[data-sao-settings] .sao-range-row{display:grid;grid-template-columns:minmax(0,9em) minmax(80px,1fr) 4ch max-content;grid-template-areas:"label slider value reset";align-items:center;gap:0 10px;margin-top:8px;padding:4px 0;border:0;border-radius:0;background:transparent;box-shadow:none}
 [data-sao-settings] .sao-range-row > label{grid-area:label;min-width:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
 [data-sao-settings] .sao-range-row > input[type=range]{grid-area:slider;min-width:0;min-height:44px}
-[data-sao-settings] .sao-range-row > output{grid-area:value;justify-self:end;text-align:right;font-variant-numeric:tabular-nums}
-[data-sao-settings] .sao-range-row > .sao-reset{grid-area:reset;min-height:44px;margin-inline-start:0;border-radius:6px}
+[data-sao-settings] .sao-range-row > output{grid-area:value;justify-self:end;text-align:right;font-variant-numeric:tabular-nums;color:var(--sao-ink)}
+[data-sao-settings] .sao-range-row > .sao-reset{grid-area:reset;min-height:44px;margin-inline-start:0;border-radius:var(--sao-radius-control)}
 [data-sao-settings] output{font:12px ui-monospace,monospace;color:var(--sao-muted);white-space:nowrap}
 [data-sao-settings] input[type=range]{width:100%;min-height:32px;accent-color:var(--sao-accent);cursor:pointer;margin:0}
 [data-sao-settings] input[type=range][data-pref]{appearance:none;background:transparent}
 [data-sao-settings] input[type=range][data-pref]::-webkit-slider-runnable-track{height:6px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:linear-gradient(to right,var(--sao-track) var(--range-progress,0%),var(--sao-line) var(--range-progress,0%))}
-[data-sao-settings] input[type=range][data-pref]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;margin-top:-7px;border:3px solid var(--sao-base);border-radius:50%;background:var(--sao-mark);box-shadow:0 0 0 1px var(--sao-mark-edge)}
+[data-sao-settings] input[type=range][data-pref]::-webkit-slider-thumb{appearance:none;width:16px;height:16px;margin-top:-6px;border:1px solid var(--sao-line);border-radius:50%;background:color-mix(in srgb,var(--sao-base) 88%,var(--sao-ink));box-shadow:0 1px 4px color-mix(in srgb,var(--sao-ink) 18%,transparent)}
 [data-sao-settings] input[type=range][data-pref]::-moz-range-track{height:6px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:linear-gradient(to right,var(--sao-track) var(--range-progress,0%),var(--sao-line) var(--range-progress,0%))}
-[data-sao-settings] input[type=range][data-pref]::-moz-range-thumb{width:14px;height:14px;border:3px solid var(--sao-base);border-radius:50%;background:var(--sao-mark);box-shadow:0 0 0 1px var(--sao-mark-edge)}
+[data-sao-settings] input[type=range][data-pref]::-moz-range-thumb{width:14px;height:14px;border:1px solid var(--sao-line);border-radius:50%;background:color-mix(in srgb,var(--sao-base) 88%,var(--sao-ink));box-shadow:0 1px 4px color-mix(in srgb,var(--sao-ink) 18%,transparent)}
 [data-sao-settings] .sao-swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 [data-sao-settings] .sao-swatch{position:relative;display:inline-flex;min-width:44px;min-height:44px;justify-content:center;align-items:center;cursor:pointer}
 [data-sao-settings] .sao-swatch input{position:absolute;opacity:0;width:38px;height:38px;margin:0;cursor:pointer}
-[data-sao-settings] .sao-swatch-face{width:32px;height:32px;background:var(--swatch);border:1px solid var(--sao-line);border-radius:50%;position:relative;pointer-events:none;box-shadow:inset 0 0 0 3px #ffffff80}
-[data-sao-settings] .sao-swatch input:checked + span{outline:2px solid var(--sao-accent);outline-offset:3px}
-[data-sao-settings] .sao-swatch input:checked + span::after{content:"✓";position:absolute;inset:3px;display:grid;place-items:center;color:var(--sao-on-accent);background:var(--sao-accent);border:1px solid var(--sao-on-accent);border-radius:50%;font-size:14px}
-[data-sao-settings] .sao-swatch input:focus-visible + span{outline:3px solid var(--sao-focus);outline-offset:4px;box-shadow:0 0 0 3px var(--sao-base)}
+[data-sao-settings] .sao-swatch-face{width:30px;height:30px;background:var(--swatch);border:1px solid var(--sao-line);border-radius:50%;position:relative;pointer-events:none;box-shadow:none}
+[data-sao-settings] .sao-swatch input:checked + span{outline:none}
+[data-sao-settings] .sao-swatch input:checked + span::after{content:"✓";position:absolute;right:-3px;bottom:-2px;width:14px;height:14px;display:grid;place-items:center;color:var(--sao-base);background:var(--sao-ink);border:1px solid color-mix(in srgb,var(--sao-base) 70%,transparent);border-radius:50%;font-size:10px;line-height:1}
+[data-sao-settings] .sao-swatch input:focus-visible + span{outline:2px solid var(--sao-focus);outline-offset:4px}
 [data-sao-settings] .sao-follow .sao-swatch-face{background:linear-gradient(135deg,var(--sao-base) 50%,var(--dsw-alias-brand-primary,Highlight) 50%)}
 [data-sao-settings] .sao-rainbow{width:44px;height:44px;min-height:44px;border:1px solid var(--sao-line);border-radius:50%;background:var(--sao-surface);display:grid;place-items:center;padding:5px}
-[data-sao-settings] .sao-rainbow::before{content:"";width:30px;height:30px;border-radius:50%;background:conic-gradient(#ef4444,#eacb37,#59b95c,#48bdc7,#6376d8,#ca62c7,#ef4444);box-shadow:inset 0 0 0 3px #ffffff80}
-[data-sao-settings] .sao-rainbow[aria-expanded=true]{outline:2px solid var(--sao-accent);outline-offset:2px}
+[data-sao-settings] .sao-rainbow::before{content:"";width:30px;height:30px;border-radius:50%;background:conic-gradient(#ef4444,#eacb37,#59b95c,#48bdc7,#6376d8,#ca62c7,#ef4444);box-shadow:none}
+[data-sao-settings] .sao-rainbow[aria-expanded=true]{box-shadow:inset 0 0 0 1px var(--sao-ink);outline:none}
 [data-sao-settings] .sao-current-color{margin-top:10px;font-size:12px;color:var(--sao-muted)}
-[data-sao-settings] .sao-picker{padding:16px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:var(--sao-surface);margin-top:14px;max-width:400px}
+[data-sao-settings] .sao-picker{padding:16px 0 0;border:0;border-top:1px solid var(--sao-line);border-radius:0;background:transparent;margin-top:14px;max-width:400px}
 [data-sao-settings] .sao-picker-grid{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:14px;align-items:stretch}
 [data-sao-settings] .sao-spectrum-wrap{position:relative;aspect-ratio:1;min-width:0}
 [data-sao-settings] .sao-spectrum{width:100%;height:100%;display:block;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);touch-action:none;cursor:crosshair}
@@ -135,7 +145,7 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-brightness input{position:absolute;inset:0;writing-mode:vertical-lr;direction:rtl;width:100%;height:100%;margin:0;appearance:none;background:transparent;border:0;accent-color:var(--sao-accent);touch-action:none}
 [data-sao-settings] .sao-brightness input::-webkit-slider-thumb{appearance:none;width:30px;height:8px;background:var(--sao-accent);border:2px solid var(--sao-on-accent);box-shadow:0 0 0 1px var(--sao-ink);border-radius:2px;cursor:ns-resize}
 [data-sao-settings] .sao-brightness input::-moz-range-thumb{width:28px;height:6px;background:var(--sao-accent);border:2px solid var(--sao-on-accent);box-shadow:0 0 0 1px var(--sao-ink);border-radius:2px}
-[data-sao-settings] .sao-brightness label{font-size:11px;color:var(--sao-muted)}
+[data-sao-settings] .sao-brightness label{font-size:12px;color:var(--sao-muted)}
 [data-sao-settings] .sao-brightness-track:focus-within{outline:3px solid var(--sao-focus);outline-offset:3px}
 [data-sao-settings] .sao-hex-row{display:flex;gap:12px;align-items:center;margin-top:14px}
 [data-sao-settings] .sao-hex-row label{font-size:12px;font-weight:400}
@@ -144,24 +154,24 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-error{font-size:12px;color:var(--sao-ink);margin-top:7px}
 [data-sao-settings] .sao-glass-choices{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 [data-sao-settings] .sao-glass-choices .sao-choice > span{padding:36px 8px 10px;min-height:90px;text-align:center}
-[data-sao-settings] .sao-glass-choices .sao-choice > input{left:calc(50% - 9px);top:12px}
+[data-sao-settings] .sao-glass-choices .sao-choice > input{left:calc(50% - 6px);top:14px}
 [data-sao-settings] .sao-wall-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 [data-sao-settings] .sao-wall .sao-choice > span{padding:0;overflow:hidden}
-[data-sao-settings] .sao-wall .sao-choice > input{top:auto;bottom:15px;left:12px}
+[data-sao-settings] .sao-wall .sao-choice > input{top:auto;bottom:18px;left:14px}
 [data-sao-settings] .sao-wall-art{display:block;aspect-ratio:16/9;background:var(--sao-surface);position:relative;overflow:hidden}
 [data-sao-settings] .sao-wall-art img{display:block;width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
 [data-sao-settings] .sao-wall-art::after{content:"";position:absolute;inset:0;border-bottom:1px solid var(--sao-line);pointer-events:none}
 [data-sao-settings] .sao-wall-name{display:block;padding:11px 8px 11px 38px;font-size:12px;font-weight:400;overflow-wrap:anywhere}
 [data-sao-settings] .sao-none-art{background:repeating-conic-gradient(var(--sao-line) 0% 25%,var(--sao-base) 0% 50%) 50%/16px 16px;display:grid;place-items:center;color:var(--sao-muted);font-size:12px}
-[data-sao-settings] .sao-upload{margin-top:20px;border:1px dashed var(--sao-line);border-radius:var(--sao-radius-surface);padding:16px;background:var(--sao-surface)}
+[data-sao-settings] .sao-upload{margin-top:20px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);padding:16px;background:color-mix(in srgb,var(--sao-glass-base) 12%,transparent);box-shadow:inset 0 1px 0 var(--sao-glint)}
 [data-sao-settings] .sao-upload label{display:block;font-size:13px;font-weight:400;margin-bottom:8px}
 [data-sao-settings] input[type=file]{max-width:100%;font-size:12px;min-height:40px}
 [data-sao-settings] input[type=file]::file-selector-button{font:inherit;min-height:36px;margin-right:8px;background:var(--sao-soft);border:1px solid var(--sao-selected-line);border-radius:var(--sao-radius-control);padding:6px 10px;color:var(--sao-ink);cursor:pointer}
 [data-sao-settings] .sao-fit{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:24px;padding:12px 0;border-bottom:1px solid var(--sao-line);font-size:13px}
-[data-sao-settings] .sao-fit span:last-child{border:1px solid var(--sao-line);padding:3px 10px;border-radius:var(--sao-radius-control);background:var(--sao-surface);color:var(--sao-muted);font-size:12px}
-[data-sao-settings] .sao-preview{padding:16px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:var(--sao-surface);min-width:0}
+[data-sao-settings] .sao-fit span:last-child{color:var(--sao-muted);font-size:12px}
+[data-sao-settings] .sao-preview{padding:16px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:color-mix(in srgb,var(--sao-glass-base) 14%,transparent);box-shadow:inset 0 1px 0 var(--sao-glint);min-width:0}
 [data-sao-settings] .sao-preview-label{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:12px;font-weight:500}
-[data-sao-settings] .sao-live{font:10px ui-monospace,monospace;color:var(--sao-muted)}
+[data-sao-settings] .sao-live{font:12px ui-monospace,monospace;color:var(--sao-muted)}
 [data-sao-settings] .sao-live::before{content:"";display:inline-block;width:5px;height:5px;background:var(--sao-accent);border-radius:50%;margin-right:5px;vertical-align:2px}
 [data-sao-settings] .sao-scene{position:relative;height:228px;border-radius:var(--sao-radius-control);overflow:hidden;background:var(--sao-surface);border:1px solid var(--sao-line);isolation:isolate;display:flex;align-items:center;justify-content:center;padding:18px}
 [data-sao-settings] .sao-scene-wall{position:absolute;inset:0;overflow:hidden;z-index:-1}
@@ -177,8 +187,8 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-mini-line + .sao-mini-line{width:65%;margin-top:7px}
 [data-sao-settings] .sao-mini-composer{height:27px;border:1px solid var(--sao-selected-line);border-radius:var(--sao-radius-control);margin-top:16px;padding-inline:10px;display:grid;align-items:center;font-size:10px;font-weight:400;color:var(--sao-muted);position:relative}
 [data-sao-settings] .sao-preview-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-[data-sao-settings] .sao-preview-meta span{font-size:10px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);padding:2px 6px;color:var(--sao-muted);background:var(--sao-surface)}
-[data-sao-settings] .sao-preview-note{margin-top:10px;font-size:11px;color:var(--sao-muted)}
+[data-sao-settings] .sao-preview-meta span{font-size:12px;color:var(--sao-muted);background:transparent}
+[data-sao-settings] .sao-preview-note{margin-top:10px;font-size:12px;color:var(--sao-muted)}
 [data-sao-settings] .sao-footer{border-top:1px solid var(--sao-line);padding-top:17px;margin-top:26px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 [data-sao-settings] .sao-status{font-size:12px;color:var(--sao-muted);overflow-wrap:anywhere}
 [data-sao-settings] .sao-status[data-error=true]{color:var(--sao-ink)}
@@ -189,6 +199,16 @@ function mountSAOSettings(container, api) {
 [data-sao-settings]{container-type:inline-size;container-name:sao-settings}
 @media(max-width:720px){[data-sao-settings]{padding:18px 16px}[data-sao-settings] .sao-layout{grid-template-columns:minmax(0,1fr);gap:24px}[data-sao-settings] .sao-scene{height:180px}[data-sao-settings] .sao-tab{flex:1;padding-inline:10px}[data-sao-settings] .sao-head{margin-bottom:16px}}
 @media(prefers-reduced-motion:reduce){[data-sao-settings] *,[data-sao-settings] *::before,[data-sao-settings] *::after{transition:none!important;animation:none!important}}
+/* One shared glass frame for the active SAO settings page. This style is
+   mounted with that page, so other settings and account menus retain ownership. */
+:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings]){--sao-settings-host-base:color-mix(in srgb,var(--dsw-alias-bg-base,Canvas) 86%,var(--dsw-alias-brand-primary,Highlight) 14%);--dsw-alias-settings-card-fill:transparent;isolation:isolate;border:0!important;border-radius:32px!important;corner-shape:round!important;background:transparent!important;box-shadow:0 24px 72px rgb(8 15 28 / .22),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 9%,transparent)!important}
+:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;corner-shape:round;background:linear-gradient(135deg,rgb(255 255 255 / .12),transparent 30%,transparent 75%,rgb(255 255 255 / .04)),color-mix(in srgb,var(--sao-settings-host-base) calc(60% * var(--sao-settings-window-alpha,.8)),transparent)!important;backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;-webkit-backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;box-shadow:inset 0 1px 0 rgb(255 255 255 / .48),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 8%,transparent)!important}
+:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])>:is(div,main,section):has([data-sao-settings]),
+:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-slot="settings.section"]:has([data-sao-settings]),
+:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-slot="settings.section"]>:has([data-sao-settings]){background:transparent!important;box-shadow:none!important}
+:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-sao-settings]{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:8px 0 24px!important;margin:0!important}
+:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-sao-settings] :is(fieldset,.sao-preview){backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+
 `;
   root.appendChild(style);
   const view = doc.createElement('div');
@@ -224,6 +244,7 @@ function mountSAOSettings(container, api) {
 <div class="sao-layout"><div class="sao-main">
 <section role="tabpanel" id="${id('panel-startup')}" aria-labelledby="${id('tab-startup')}" data-panel="startup">
   <div class="sao-section-head"><h3>启动</h3></div>
+  <fieldset class="sao-feature-mode"><legend>功能模式</legend><div class="sao-mode-tabs" role="radiogroup" aria-label="功能模式">${choice('featureMode', 'all', '全部功能', '')}${choice('featureMode', 'startup-only', '仅限启动动画', '')}</div><p class="sao-hint">仅限启动动画时，保留当前其他主题的配色、字体和界面效果。</p></fieldset>
   ${toggle('startup', '启动时播放动画', '打开 DSH 时，自动播放 Link Start。')}
   <fieldset>${fieldLegend('animation', '动画样式')}<div class="sao-choices sao-animation-choices">${choice('animation', '1', '动画 1', '还原光束')}${choice('animation', '2', '动画 2', '纤细光束')}</div></fieldset>
   <fieldset>${fieldLegend('voice', 'Link Start 语音')}<div class="sao-choices sao-compact-choices">${choice('voice', 'kirito', '桐人', '')}${choice('voice', 'asuna', '亚丝娜', '')}</div></fieldset>
@@ -274,7 +295,8 @@ function mountSAOSettings(container, api) {
 <section role="tabpanel" id="${id('panel-wallpaper')}" aria-labelledby="${id('tab-wallpaper')}" data-panel="wallpaper" hidden>
   <div class="sao-section-head"><h3>壁纸</h3></div>
   <fieldset class="sao-wall">${fieldLegend('wallpaper', '壁纸')}<div class="sao-wall-grid" data-wall-grid></div></fieldset>
-  <div class="sao-upload"><label for="${id('upload')}">上传自定义壁纸</label><input id="${id('upload')}" type="file" accept="image/*" aria-describedby="${id('upload-help')}"><p class="sao-hint" id="${id('upload-help')}">选择图片后自动保存并应用，建议使用横向图片。</p><button class="sao-btn" data-action="remove-upload" type="button" hidden>删除自定义壁纸</button></div>
+  <div class="sao-upload"><label for="${id('upload')}">上传自定义壁纸</label><input id="${id('upload')}" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,video/mp4,video/webm" aria-describedby="${id('upload-help')}"><p class="sao-hint" id="${id('upload-help')}">图片 ≤25 MB；MP4／WebM ≤200 MiB、30 秒，支持 4K／5K，长边 ≤5120、短边 ≤2880。自动保存到本机浏览器。</p><button class="sao-btn" data-action="remove-upload" type="button" hidden>删除自定义壁纸</button></div>
+  <fieldset>${fieldLegend('videoQuality', '视频播放')}<div class="sao-choices">${choice('videoQuality', 'balanced', '自动循环', '失焦或后台时暂停')}${choice('videoQuality', 'still', '静态省电', '仅显示视频封面')}</div><p class="sao-hint">原生静音循环；建议使用 24–30fps 的短循环。后台、失焦或壁纸不透明度为 0 时暂停；减少动态效果时仅显示封面并卸载视频源。玻璃折射使用缩小封面。</p><p class="sao-hint" data-video-status role="status" aria-live="polite"></p></fieldset>
   <fieldset aria-describedby="${id('wallpaper-scope-help')}">${fieldLegend('wallpaperScope', '壁纸显示范围')}<div class="sao-choices">${choice('wallpaperScope', 'full', '全界面', '覆盖会话与右侧栏')}${choice('wallpaperScope', 'conversation', '仅限会话', '会话填充 · 右栏纯色')}</div><p class="sao-hint" id="${id('wallpaper-scope-help')}">默认全界面，保留当前效果。仅限会话时，壁纸在会话区域居中填充，可继续调整位置与大小；右侧栏使用软件当前主题的界面底色，不显示壁纸。</p></fieldset>
   <div class="sao-fit"><span>适应方式</span><span>填充 · 默认</span></div>
   ${range('wallOpacity', '壁纸不透明度', 0, 100, '%')}
@@ -519,6 +541,10 @@ function mountSAOSettings(container, api) {
   }
   function sync() {
     if (disposed) return;
+    const startupOnly = prefs.featureMode === 'startup-only';
+    for (const tab of all('[data-tab]')) tab.hidden = startupOnly && tab.dataset.tab !== 'startup';
+    if (startupOnly && find('[data-tab="startup"]').getAttribute('aria-selected') !== 'true') selectTab(find('[data-tab="startup"]'));
+    find('.sao-preview').hidden = startupOnly;
     surfacePicker.sync(); ensureAnimationPreviews();
     for (const input of controls) {
       const key = input.dataset.pref;
@@ -554,9 +580,11 @@ function mountSAOSettings(container, api) {
     for (const item of presetInputs) item.input.checked = item.value === prefs.accent;
     syncAccent();
     ensureWallCards();
+    const vs = api.videoStatus;
+    find('[data-video-status]').textContent = vs?.reason === 'error' ? '视频播放失败，正在显示静态封面。' : vs?.state === 'playing' ? '正在静音循环播放' : vs?.reason === 'still' ? '静态省电：视频源已卸载' : vs?.reason === 'reduced-motion' ? '减少动态效果：显示静态封面' : vs?.state === 'paused' ? '已暂停：显示静态封面' : '';
     const requestedFamily = String(prefs.fontFamily || defaults.fontFamily).trim();
     const family = requestedFamily === '方正兰亭圆_准' ? 'SAO Local Rounded' : requestedFamily;
-    root.style.fontFamily = '"' + family.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '",system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif';
+    root.style.fontFamily = startupOnly ? 'inherit' : '"' + family.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '",system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif';
     syncPreview();
     const wall = wallpapers().find(item => item.id === prefs.wallpaper);
     const previewImage = find('.sao-scene-wall img');
@@ -585,12 +613,13 @@ function mountSAOSettings(container, api) {
     on(tab, 'click', () => selectTab(tab, false));
     on(tab, 'keydown', event => {
       let next;
-      const current = tabs.indexOf(tab);
-      if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
-      if (event.key === 'ArrowLeft') next = (current + tabs.length - 1) % tabs.length;
+      const visibleTabs = tabs.filter(item => !item.hidden);
+      const current = visibleTabs.indexOf(tab);
+      if (event.key === 'ArrowRight') next = (current + 1) % visibleTabs.length;
+      if (event.key === 'ArrowLeft') next = (current + visibleTabs.length - 1) % visibleTabs.length;
       if (event.key === 'Home') next = 0;
-      if (event.key === 'End') next = tabs.length - 1;
-      if (next !== undefined) { event.preventDefault(); selectTab(tabs[next], true); }
+      if (event.key === 'End') next = visibleTabs.length - 1;
+      if (next !== undefined) { event.preventDefault(); selectTab(visibleTabs[next], true); }
     });
   }
   const themeControls = controls.filter(input => input.dataset.pref === 'theme');
@@ -758,8 +787,8 @@ function mountSAOSettings(container, api) {
   on(upload, 'change', () => {
     const file = upload.files && upload.files[0];
     if (!file) return;
-    if (file.type && !file.type.startsWith('image/')) { announce('请选择图片文件后重试。', true); upload.value = ''; return; }
-    run(async () => { await api.upload(file); await api.set({ wallpaper: 'custom' }); }, '正在保存壁纸', upload).then(() => { if (!disposed) upload.value = ''; });
+    if (file.type && !file.type.startsWith('image/') && !['video/mp4','video/webm'].includes(file.type)) { announce('请选择图片、MP4 或 WebM 后重试。', true); upload.value = ''; return; }
+    run(async () => { await api.upload(file); }, '正在保存壁纸', upload).then(() => { if (!disposed) upload.value = ''; });
   });
   const removeButton = find('[data-action="remove-upload"]');
   on(removeButton, 'click', () => run(() => api.removeUpload(), '正在删除自定义壁纸', removeButton));

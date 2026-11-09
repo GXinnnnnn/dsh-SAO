@@ -11,7 +11,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
   const KEY = 'dsh-sao.preferences.v4';
-  const defaults = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallpaperScope: 'full', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
+  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallpaperScope: 'full', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
   const bounded = (v, fallback, min, max) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
   const rightSceneModes = ['off','frosted','liquid'];
   const rightSceneDefaults = mode => ({opacity: mode === 'liquid' ? .70 : .50, blur: 0});
@@ -59,6 +59,8 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   }
   function normalize(value) {
     const p = value && typeof value === 'object' ? value : {}, n = { ...defaults };
+    if (p.featureMode === 'startup-only') n.featureMode = 'startup-only';
+    if (p.videoQuality === 'still') n.videoQuality = 'still';
     for (const k of ['startup','sound','rightLinked','headerLinked']) if (typeof p[k] === 'boolean') n[k] = p[k];
     if (p.animation === '2') n.animation = '2';
     if (p.voice === 'asuna') n.voice = 'asuna';
@@ -121,13 +123,14 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     return normalize(next);
   }
   let preferences; try { preferences = normalize(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { preferences = normalize({}); }
-  let disposed = false, notice = '', tokenDispose = null, customURL = null, customName = '', queued = 0, revision = 0, uploadRevision = 0;
+  let disposed = false, notice = '', tokenDispose = null, customURL = null, customPosterURL = null, customKind = 'image', customMeta = null, customName = '', queued = 0, revision = 0, uploadRevision = 0;
   const subscribers = new Set(), panelDisposers = new Set(), touched = new Set(), componentTouched = new Set(), adaptiveObserved = new Set();
   const style = document.createElement('style'); style.dataset.saoAppearance = '4'; document.head.append(style);
   const background = document.createElement('div'); background.dataset.saoWallpaper = ''; background.setAttribute('aria-hidden','true');
   background.style.cssText = 'position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1';
   const wallpaperClip = document.createElement('div'); wallpaperClip.dataset.saoWallpaperClip = ''; background.append(wallpaperClip);
   const image = document.createElement('img'); image.alt = ''; image.draggable = false; image.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block'; wallpaperClip.append(image);
+  const videoWallpaper = SAOVideoWallpaper.create(image, () => notify());
   const conversationBackdrop = document.createElement('div'); conversationBackdrop.dataset.saoConversationBackdrop = ''; conversationBackdrop.hidden = true; background.append(conversationBackdrop);
   const rightBase = document.createElement('div'); rightBase.dataset.saoWallpaperRightBase = ''; rightBase.hidden = true; background.append(rightBase);
   const rightBackdrop = document.createElement('div'); rightBackdrop.dataset.saoRightBackdrop = ''; rightBackdrop.hidden = true; background.append(rightBackdrop);
@@ -300,7 +303,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   function paintBackdrop(element, box, opacity, blur, radius = '0px', corner = 'round', material = 'off') {
     // A single fill owns the right scene. Frost adds diffusion; liquid adds an
     // edge-only optical canvas so an explicitly blurred center stays blurred.
-    const diffusion = opacity === 0 ? 0 : material === 'frosted' ? Math.max(12, blur) : blur;
+    let diffusion = opacity === 0 ? 0 : material === 'frosted' ? Math.max(12, blur) : blur;
     element.hidden = !box || opacity === 0 && diffusion === 0 || element === rightBackdrop && onlyBrowserRight;
     if (element === rightBackdrop && element.getAttribute('data-sao-scene-material') !== material) element.setAttribute('data-sao-scene-material',material);
     if (!box) return;
@@ -415,6 +418,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     '[role="dialog"][data-shortcut-modal="settings"]'
   ];
   const excluded = '[data-plugin],[data-pet],[data-whale],[data-slot="sidebar"],[data-slot="shell.sidebar"],iframe,canvas,video';
+  const saoSettingsDialogSelector = ':is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])';
   const windowSelector = '[data-menu-material],[role="dialog"],[role="alertdialog"],[role="tooltip"],[role="alert"][style*="--dsh-toast-hold"],[data-popover-content]';
   function chooseSurfaces() {
     const windows = [...document.querySelectorAll(windowSelector)];
@@ -430,6 +434,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   function applyTokens() {
     tokenDispose?.(); tokenDispose = null;
     const declarations = [];
+    if (preferences.featureMode === 'startup-only') { accentCSS = ''; return; }
     const luminance = hex => {
       const c = [1,3,5].map(i => parseInt(hex.slice(i,i+2),16)/255).map(v => v <= .04045 ? v/12.92 : ((v+.055)/1.055)**2.4);
       return c[0]*.2126+c[1]*.7152+c[2]*.0722;
@@ -445,10 +450,40 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     }
     accentCSS = declarations.length ? `body{${declarations.join(';')}}` : '';
   }
+  let modeAnnounced = null, modeGeneration = 0;
+  function announceMode() {
+    if (modeAnnounced === preferences.featureMode) return;
+    modeAnnounced = preferences.featureMode;
+    modeGeneration++;
+    window.dispatchEvent(new CustomEvent('dsh-sao-mode-change', {detail:{mode:modeAnnounced}}));
+  }
+  function suspendAppearance() {
+    videoWallpaper.set({enabled:false});
+    cancelAnimationFrame(queued); queued = 0;
+    themeTransition?.skipTransition?.(); themeAnimation?.cancel(); themeTransitionStyle?.remove();
+    document.documentElement.removeAttribute('data-sao-switching');
+    liquid.update({enabled:false,surfaces:[]});
+    style.remove(); background.remove();
+    frameHost?.removeAttribute('data-sao-wall-frame'); frameHost?.removeAttribute('data-sao-wall-positioned'); frameHost = null;
+    for (const el of layoutTouched) for (const attr of ['data-sao-wall-column','data-sao-wall-right','data-sao-browser-only','data-sao-main-joined','data-sao-right-joined']) el.removeAttribute(attr);
+    layoutTouched.clear();
+    for (const el of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) el.removeAttribute(attr);
+    shellTouched.clear();
+    for (const el of componentTouched) { el.removeAttribute('data-sao-component'); el.style.removeProperty('--sao-component-alpha'); }
+    componentTouched.clear();
+    for (const el of contextTouched) el.removeAttribute('data-sao-context'); contextTouched.clear();
+    for (const el of touched) { for (const attr of materialAttributes) el.removeAttribute(attr); el.style.removeProperty('--sao-surface-alpha'); }
+    touched.clear();
+    for (const [nodes,attribute] of [[rightPanesTouched,'data-sao-right-pane'],[rightRootsTouched,'data-sao-right-root'],[browserPanesTouched,'data-sao-browser-pane']]) { for (const el of nodes) el.removeAttribute(attribute); nodes.clear(); }
+    resizeObserver?.disconnect(); adaptiveObserved.clear(); contextCardsObserved.clear(); contextViewportsObserved.clear(); rightPanesObserved.clear();
+  }
   // A failed material pass must remain observable without taking down settings.
-  const runtimeState = {build:'wallpaper-scope-20261106',passes:0,error:null};
+  const runtimeState = {build:'sao-1.0.4',passes:0,error:null};
   function sync() {
     if (disposed) return;
+    announceMode();
+    if (preferences.featureMode === 'startup-only') { suspendAppearance(); return; }
+    if (!style.isConnected) document.head.append(style);
     try { syncAppearance(); runtimeState.passes++; runtimeState.error = null; }
     catch (error) {
       const failure = {name:String(error?.name || 'Error'),message:String(error?.message || error).slice(0,320)};
@@ -458,7 +493,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   }
   function syncAppearance() {
     if (disposed) return;
-    const p = preferences, source = p.wallpaper === 'custom' ? customURL : builtins.find(x => x.id === p.wallpaper)?.src;
+    const p = preferences, source = p.wallpaper === 'custom' ? (customPosterURL || customURL) : builtins.find(x => x.id === p.wallpaper)?.src;
     if (source !== loadedSource) {
       loadedSource = source || ''; imageReady = false;
       if (source) image.src = source; else image.removeAttribute('src');
@@ -466,6 +501,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     background.hidden = false; image.hidden = !source;
     image.style.objectPosition = `${p.wallX}% ${p.wallY}%`; image.style.transform = `scale(${p.wallScale / 100})`;
     image.style.opacity = String(p.wallOpacity);
+    videoWallpaper.set({source:customKind === 'video' ? customURL || '' : '',enabled:p.wallpaper === 'custom' && customKind === 'video',quality:p.videoQuality});
     layoutWallpaper();
     background.style.background = 'var(--dsw-alias-bg-base,#f4f6f9)';
     const scopedBase = p.wallpaperScope === 'conversation' ? wallpaperBaseColor() : baseColor();
@@ -478,9 +514,23 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const filter = (opacity, blur, frost = false) => opacity > 0 ? (blur || frost ? `blur(${frost ? Math.max(12,blur) : blur}px)` : 'none') : 'none';
     const glass = p.glass !== 'off' || rightGlass !== 'off' || contextGlass !== 'off', alpha = p.opacity, blur = p.conversationBlur, windowAlpha = windowSurfaceOpacity(p);
     const materialBase = 'var(--dsw-alias-bg-base,#f4f6f9)';
+    const readoutDock = 'body :is([data-slot="main.conversation"],[data-slot="rightbar"]) :is([data-composer-dock],.GRgSLq_dock,[data-mobile-nav="stats"])';
     lastStyle = `${accentCSS}
 @font-face{font-family:"SAO Local Rounded";src:local("方正兰亭圆_准"),local("方正兰亭圆_GBK_准"),local("FZLanTingYuan-M-GBK");font-display:swap;font-weight:400}
-body{--sao-font:${JSON.stringify(p.fontFamily === '方正兰亭圆_准' ? 'SAO Local Rounded' : p.fontFamily)},"Microsoft YaHei",system-ui,sans-serif;--dsh-font-family-text:var(--sao-font)!important;--dsw-font-family:var(--sao-font)!important;font-family:var(--sao-font);font-weight:400;font-synthesis:none;--sao-accent:var(--dsw-alias-brand-primary);--dsw-specific-sidebar-fill:color-mix(in srgb,var(--dsw-alias-bg-base) 94%,var(--sao-accent) 6%)!important}
+body{--sao-settings-window-alpha:${windowAlpha};--sao-settings-host-filter:${windowAlpha>0&&glass?'blur(24px) saturate(1.12)':'none'};--sao-font:${JSON.stringify(p.fontFamily === '方正兰亭圆_准' ? 'SAO Local Rounded' : p.fontFamily)},"Microsoft YaHei",system-ui,sans-serif;--dsh-font-family-text:var(--sao-font)!important;--dsw-font-family:var(--sao-font)!important;font-family:var(--sao-font);font-weight:400;font-synthesis:none;--sao-accent:var(--dsw-alias-brand-primary);--dsw-specific-sidebar-fill:color-mix(in srgb,var(--dsw-alias-bg-base) 94%,var(--sao-accent) 6%)!important}
+/* Keep the entire dock on one baseline. It owns horizontal scrolling when
+   constrained, so neither registered stats nor ContextMeter fall below the seat.
+   Do not override display: the host's empty/hidden and pocket opt-out still win. */
+${readoutDock}{box-sizing:border-box!important;flex:0 0 auto!important;flex-flow:row nowrap!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;min-width:0!important;width:max-content;max-width:100%!important;height:auto!important;min-height:28px!important;max-height:none!important;padding:2px 0 4px!important;white-space:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-border-l2) transparent}
+:is(${readoutDock}) [data-slot="conversation.composer.dock"]{display:contents!important}
+:is(${readoutDock}) :is([data-slot="conversation.composer.dock"]>*,.hNGZaa_anchor,.hNGZaa_pill,.A6Bq1a_root,.A6Bq1a_trigger){flex:0 0 auto!important;min-width:max-content!important;white-space:nowrap!important}
+:is(${readoutDock}) [data-slot="conversation.composer.dock"]>:is(div,section){display:inline-flex!important;flex-flow:row nowrap!important;align-items:center!important;gap:6px!important}
+:is(${readoutDock}) :where(span,button,output,small){white-space:nowrap!important}
+:is(${readoutDock}) .hNGZaa_label{overflow:visible!important;text-overflow:clip!important}
+/* Native StatsPills + ContextMeter: strengthen only the composer readouts.
+   The exact dock class is a verified fallback for hosts before data-composer-dock. */
+:is([data-slot="main.conversation"],[data-slot="rightbar"]) :is([data-composer-dock],.GRgSLq_dock,[data-slot="conversation.composer.dock"]){--sao-readout-ink:var(--dsw-alias-label-primary,#172333);--dsw-alias-label-secondary:var(--sao-readout-ink);--dsw-alias-label-tertiary:var(--sao-readout-ink);--dsw-alias-label-caption:var(--sao-readout-ink);color:var(--sao-readout-ink);font-weight:600;font-synthesis:weight}
+:is([data-slot="main.conversation"],[data-slot="rightbar"]) :is([data-composer-dock],.GRgSLq_dock,[data-slot="conversation.composer.dock"]) :where(span,button,output,small){font-weight:600}
 [data-sao-shell]{background:var(--dsw-specific-sidebar-fill)!important;--sao-shell-base:color-mix(in srgb,var(--dsw-alias-bg-base) 97%,var(--sao-accent) 3%)}
 [data-sao-shell]::before,[data-sao-shell-sidebar],[data-sao-shell-sidebar] > *,[data-slot="statusbar"] > *,[data-slot="bottom"] > *,[data-shell-bottom]{background:var(--dsw-specific-sidebar-fill)!important}
 [data-sao-shell-center]{background:var(--sao-shell-base)!important}
@@ -629,7 +679,7 @@ ${saoBetterSidebarCSS(materialBase)}
     paintBackdrop(rightBackdrop,rightBounds,rightOpacity,rightBlur,'16px','round',rightGlass);
     const isConversationSurface = el => !isRight(el) && !isWindow(el);
     // Nonzero background blur uses the CSS backdrop path rather than a costly or mismatched GPU approximation.
-    const liquidSurfaces = surfaces.filter(el => surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
+    const liquidSurfaces = surfaces.filter(el => !el.matches(saoSettingsDialogSelector) && surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
     if (rightGlass === 'liquid' && rightBounds && !rightBackdrop.hidden) liquidSurfaces.unshift(rightBackdrop);
     // Card bevels refract the continuous scene rather than sampling untouched
     // wallpaper through it. This prevents a clear ring around a tinted card.
@@ -646,7 +696,7 @@ ${saoBetterSidebarCSS(materialBase)}
   image.onload = () => { imageReady = true; schedule(); };
   image.onerror = () => { imageReady = false; notice = '壁纸载入失败，请重新选择或上传'; notify(); };
   function schedule() { if (!disposed && !document.hidden && !queued) queued = requestAnimationFrame(() => { queued = 0; sync(); }); }
-  const structure = '[data-slot],[data-dockkit-content],[data-dockkit-empty],[data-dockkit-strip],[data-sidebar-right-panel],[data-sao-material],' + windowSelector + ',' + componentSelector + ',' + contextRootSelector + ',' + contextCardSelector + ',' + rightPaneSelector + ',' + browserRootSelector;
+  const structure = '[data-sao-settings],[data-slot],[data-dockkit-content],[data-dockkit-empty],[data-dockkit-strip],[data-sidebar-right-panel],[data-sao-material],' + windowSelector + ',' + componentSelector + ',' + contextRootSelector + ',' + contextCardSelector + ',' + rightPaneSelector + ',' + browserRootSelector;
   const observer = new MutationObserver(records => {
     if (records.some(r => {
       if (r.type === 'attributes') return (!!r.target.closest?.('[data-dsh-native-tab-host],[data-dsh-bottom-panel]') || r.target.matches?.(windowSelector + ',' + contextRootSelector + ',[data-dockkit-content],[data-dockkit-host],[data-sidebar-right-session],[data-sidebar-right-panel],' + rightPaneSelector + ',' + browserRootSelector)) && (!['style','class'].includes(r.attributeName) || !touched.has(r.target));
@@ -654,7 +704,7 @@ ${saoBetterSidebarCSS(materialBase)}
     })) schedule();
   });
   observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
-  const onStorage = event => { if (event.key === KEY) { try { preferences = normalize(JSON.parse(event.newValue || '{}')); applyTokens(); sync(); notify(); } catch {} } };
+  const onStorage = event => { if (event.key === KEY) { try { preferences = normalize(JSON.parse(event.newValue || '{}')); revision++; applyTokens(); sync(); notify(); } catch {} } };
   window.addEventListener('storage', onStorage);
   const onContextScroll = event => { if (event.target instanceof Element && (event.target.closest('[data-sao-wall-column]') || event.target.closest(contextRootSelector) || [...contextTouched].some(root => event.target.contains(root)))) schedule(); };
   document.addEventListener('scroll',onContextScroll,{capture:true,passive:true});
@@ -663,10 +713,12 @@ ${saoBetterSidebarCSS(materialBase)}
   function readThemePreference() { const value = ctx.theme.getTheme?.()?.preference; return ['system','light','dark'].includes(value) ? value : preferences.theme; }
   preferences.theme = readThemePreference();
   ctx.on('theme/change', () => { preferences.theme = readThemePreference(); schedule(); notify(); });
-  let themeTransition = null, themeAnimation = null, themeTransitionStyle = null;
+  let themeTransition = null, themeAnimation = null, themeTransitionStyle = null, themeRequestRevision = 0;
   async function changeTheme(mode, origin) {
-    if (!['system','light','dark'].includes(mode) || disposed) return;
-    const change = () => { ctx.theme.setTheme(mode); preferences.theme = readThemePreference(); persist(); sync(); };
+    if (!['system','light','dark'].includes(mode) || disposed || preferences.featureMode === 'startup-only') return;
+    const generation = modeGeneration, request = ++themeRequestRevision;
+    const isCurrent = () => !disposed && generation === modeGeneration && request === themeRequestRevision && preferences.featureMode === 'all';
+    const change = () => { if (!isCurrent()) return; ctx.theme.setTheme(mode); preferences.theme = readThemePreference(); persist(); sync(); };
     if (mode === readThemePreference()) return;
     themeTransition?.skipTransition?.(); themeAnimation?.cancel();
     if (!document.startViewTransition || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) { change(); return; }
@@ -678,7 +730,7 @@ ${saoBetterSidebarCSS(materialBase)}
     document.documentElement.setAttribute('data-sao-switching','');
     document.head.append(rule); themeTransitionStyle = rule;
     let changed = false, updateError = null;
-    const update = () => { if (!changed && !disposed) { changed = true; try { change(); } catch (error) { updateError = error; throw error; } } };
+    const update = () => { if (!changed && isCurrent()) { changed = true; try { change(); } catch (error) { updateError = error; throw error; } } };
     let transition;
     const cancelTransition = () => { themeAnimation?.cancel(); transition?.skipTransition?.(); };
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -708,30 +760,44 @@ ${saoBetterSidebarCSS(materialBase)}
       request.onsuccess = () => {
         const db = request.result, tx = db.transaction('images', mode), req = task(tx.objectStore('images'));
         let value; req.onsuccess = () => { value = req.result; }; tx.oncomplete = () => { db.close(); resolve(value); };
-        tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || Error('图片存储不可用')); };
+        tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || Error('壁纸存储不可用')); };
       };
     });
+  }
+  function releaseCustom() {
+    videoWallpaper.set({source:'',enabled:false});
+    if (customURL) URL.revokeObjectURL(customURL);
+    if (customPosterURL) URL.revokeObjectURL(customPosterURL);
+    customURL = customPosterURL = null; customKind = 'image'; customMeta = null; customName = '';
+  }
+  function useCustom(value) {
+    releaseCustom();
+    customKind = value.kind === 'video' ? 'video' : 'image';
+    customURL = URL.createObjectURL(value.blob);
+    if (customKind === 'video' && value.poster instanceof Blob) customPosterURL = URL.createObjectURL(value.poster);
+    customMeta = value.meta || null; customName = value.name || '我的壁纸';
   }
   async function loadCustom() {
     const current = uploadRevision;
     try {
       const value = await dbRequest('readonly', s => s.get('custom'));
-      if (disposed || current !== uploadRevision || !value?.blob) return;
-      if (customURL) URL.revokeObjectURL(customURL);
-      customURL = URL.createObjectURL(value.blob); customName = value.name || '我的壁纸'; sync(); notify();
+      if (disposed || current !== uploadRevision || !(value?.blob instanceof Blob)) return;
+      if (value.kind === 'video' && !(value.poster instanceof Blob)) throw Error('视频封面缺失，请重新上传');
+      useCustom(value); sync(); notify();
     } catch (error) { if (preferences.wallpaper === 'custom') storageNotice(error); }
   }
   const api = {
     get: () => ({ ...preferences, rightSceneProfiles: normalizeRightScenes(preferences.rightSceneProfiles), contextSceneProfiles: normalizeRightScenes(preferences.contextSceneProfiles, contextSceneDefaults), headerSceneProfiles: normalizeRightScenes(preferences.headerSceneProfiles, headerSceneDefaults) }), status: () => notice,
     getDefault: key => Object.hasOwn(defaults, key) ? settingDefault(key, preferences) : undefined,
     get animationPreviews() { return animationPreviews; },
-    get wallpapers() { return [...builtins, ...(customURL ? [{id:'custom',name:customName,src:customURL}] : [])]; },
+    get wallpapers() { return [...builtins, ...(customURL ? [{id:'custom',name:customName,kind:customKind,meta:customMeta,src:customPosterURL || customURL}] : [])]; },
+    get videoStatus() { return videoWallpaper.status; },
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     set(patch) {
       if (disposed) return;
       const normalized = patchPreferences(preferences, patch);
       if (Object.keys(defaults).every(key => key.endsWith('SceneProfiles') ? JSON.stringify(preferences[key]) === JSON.stringify(normalized[key]) : Object.is(preferences[key], normalized[key]))) return;
-      preferences = normalized; revision++; if (Object.hasOwn(patch,'accent') || Object.hasOwn(patch,'surfaceColor')) applyTokens(); persist(); schedule();
+      preferences = normalized; revision++; announceMode(); if (Object.hasOwn(patch,'accent') || Object.hasOwn(patch,'surfaceColor') || Object.hasOwn(patch,'featureMode')) applyTokens(); persist(); if (Object.hasOwn(patch,'featureMode')) sync(); else schedule();
       if (patch.startup === false) window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();
     },
     resetSetting(key, origin) {
@@ -748,18 +814,25 @@ ${saoBetterSidebarCSS(materialBase)}
     preview() { window[Symbol.for('dsh.sao.replay.v4')]?.(preferences); },
     async upload(file) {
       if (disposed) return;
-      if (!file || !['image/jpeg','image/png','image/webp','image/avif','image/gif'].includes(file.type)) throw Error('请选择 JPG、PNG、WebP、AVIF 或 GIF 图片');
-      if (file.size > 25*1024*1024) throw Error('图片最大 25 MB');
-      const checkURL = URL.createObjectURL(file), candidate = new Image();
-      try { candidate.src = checkURL; await candidate.decode(); if (candidate.naturalWidth * candidate.naturalHeight > 40000000) throw Error('图片分辨率请控制在 4000 万像素以内'); } finally { URL.revokeObjectURL(checkURL); }
       const current = ++uploadRevision;
-      await dbRequest('readwrite', s => s.put({blob:file,name:file.name},'custom'));
+      let record;
+      if (['video/mp4','video/webm'].includes(file?.type)) {
+        record = {...await SAOVideoWallpaper.validate(file),blob:file,name:file.name};
+      } else {
+        if (!file || !['image/jpeg','image/png','image/webp','image/avif','image/gif'].includes(file.type)) throw Error('请选择 JPG、PNG、WebP、AVIF、GIF 图片或 MP4、WebM 视频');
+        if (file.size > 25*1024*1024) throw Error('图片最大 25 MB');
+        const checkURL = URL.createObjectURL(file), candidate = new Image();
+        try { candidate.src = checkURL; await candidate.decode(); if (candidate.naturalWidth * candidate.naturalHeight > 40000000) throw Error('图片分辨率请控制在 4000 万像素以内'); } finally { URL.revokeObjectURL(checkURL); }
+        record = {kind:'image',blob:file,name:file.name};
+      }
       if (disposed || current !== uploadRevision) return;
-      if (customURL) URL.revokeObjectURL(customURL); customURL = URL.createObjectURL(file); customName = file.name;
-      api.set({wallpaper:'custom',wallX:50,wallY:50,wallScale:100});
+      await dbRequest('readwrite', s => s.put(record,'custom'));
+      if (disposed || current !== uploadRevision) return;
+      useCustom(record);
+      api.set({wallpaper:'custom',wallX:50,wallY:50,wallScale:100}); sync(); notify();
     },
-    async removeUpload() { ++uploadRevision; await dbRequest('readwrite', s => s.delete('custom')); if (customURL) URL.revokeObjectURL(customURL); customURL = null; customName = ''; if (preferences.wallpaper === 'custom') api.set({wallpaper:'none'}); else { sync(); notify(); } },
-    async reset() { await changeTheme(defaults.theme); preferences = normalize({ ...defaults, theme: readThemePreference() }); applyTokens(); persist(); sync(); }
+    async removeUpload() { const current = ++uploadRevision; await dbRequest('readwrite', s => s.delete('custom')); if (disposed || current !== uploadRevision) return; releaseCustom(); if (preferences.wallpaper === 'custom') api.set({wallpaper:'none'}); sync(); notify(); },
+    async reset() { const current = revision; await changeTheme(defaults.theme); if (disposed || current !== revision) return; preferences = normalize({ ...defaults, theme: readThemePreference() }); announceMode(); applyTokens(); persist(); sync(); }
   };
   function Settings() {
     const ref = React.useRef(null);
@@ -787,7 +860,7 @@ ${saoBetterSidebarCSS(materialBase)}
       let cssRules=null;try{cssRules=style.sheet?.cssRules.length??null;}catch{}
       const modules=ctx.get('modules'), state=modules?.entries?.state?.getSnapshot?.(), change=modules?.entries?.releaseChange?.getSnapshot?.();
       const release=value=>value?{version:value.version,commit:value.commit}:null;
-      const ownIds=['@local/dsh-sao-skin','@local/dsh-sao-market'];
+      const ownIds=['@local/dsh-sao-link-start','@local/dsh-sao-skin','@local/dsh-sao-market'];
       const moduleStatus={pageRelease:release(modules?.manifest?.release),ownRows:(modules?.manifest?.modules||[]).filter(row=>ownIds.includes(row.id)).map(row=>({id:row.id,rev:row.rev})),syncing:state?.syncing??null,failureCount:state?.failures?.length??null,ownFailures:(state?.failures||[]).filter(row=>ownIds.includes(row.id)).map(row=>({id:row.id,message:String(row.message).slice(0,240)})),announcedReleaseChange:change?{page:release(change.page),previous:release(change.previous),host:release(change.host)}:null};
       const betterAdapter = {selectorSupported:CSS.supports('selector(:is('+saoBetterSidebarSelectors().components+'))'),neutralRulePresent:[...(style.sheet?.cssRules||[])].some(rule=>!!rule.style?.getPropertyValue('--sao-bs-neutral-fill'))};
       const scene=rightScene(),context=contextSceneLayers(preferences,scene.opacity);
@@ -805,8 +878,8 @@ ${saoBetterSidebarCSS(materialBase)}
     for (const el of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) el.removeAttribute(attr); shellTouched.clear();
     for (const el of componentTouched) { el.removeAttribute('data-sao-component'); el.style.removeProperty('--sao-component-alpha'); } componentTouched.clear();
     for (const el of contextTouched) el.removeAttribute('data-sao-context'); contextTouched.clear();
-    tokenDispose?.(); liquid.dispose(); style.remove(); background.remove(); image.onload = image.onerror = null;
-    if (customURL) URL.revokeObjectURL(customURL); for (const cleanup of panelDisposers) cleanup(); panelDisposers.clear(); subscribers.clear();
+    tokenDispose?.(); videoWallpaper.dispose(); liquid.dispose(); style.remove(); background.remove(); image.onload = image.onerror = null;
+    if (customURL) URL.revokeObjectURL(customURL); if (customPosterURL) URL.revokeObjectURL(customPosterURL); for (const cleanup of panelDisposers) cleanup(); panelDisposers.clear(); subscribers.clear();
     for (const el of touched) { el.style.removeProperty('--sao-surface-alpha'); el.removeAttribute('data-sao-material'); el.removeAttribute('data-sao-positioned'); el.removeAttribute('data-sao-surface'); el.removeAttribute('data-sao-zone'); } touched.clear();
     window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();
     if (window[instanceKey] === controller) delete window[instanceKey];

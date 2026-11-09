@@ -38,15 +38,15 @@
 #sao-startup .sao-intro{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#10191f;color:#eefaff;font-size:clamp(32px,5vw,76px);letter-spacing:.13em;font-weight:300;pointer-events:none}
 #sao-startup button{font:12px "Segoe UI","Microsoft YaHei",sans-serif;cursor:pointer;box-sizing:border-box}
 #sao-startup button:focus-visible{outline:3px solid #f0a33b;outline-offset:3px}
-#sao-startup .sao-skip{opacity:0;position:absolute;right:24px;top:20px;border:1px solid #78919e;background:#152430dd;color:#fff;padding:9px 15px;border-radius:3px}
+#sao-startup .sao-skip{opacity:.85;position:absolute;right:24px;top:20px;border:1px solid #78919e;background:#152430dd;color:#fff;padding:9px 15px;border-radius:3px}
 #sao-startup .sao-skip:hover,#sao-startup .sao-skip:focus-visible{opacity:1}
 #sao-startup .sao-sound-hint{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);max-width:90%;background:#142632ed;color:#fff;border:1px solid #80b9ce;border-radius:3px;padding:11px 18px}
 @keyframes sao-startup-exit{to{opacity:0;visibility:hidden}}
 `;
     let canvas = document.createElement('canvas'); canvas.setAttribute('aria-hidden', 'true');
     const intro = document.createElement('div'); intro.className = 'sao-intro'; intro.textContent = 'LINK START'; intro.setAttribute('aria-hidden', 'true');
-    const skip = document.createElement('button'); skip.type = 'button'; skip.className = 'sao-skip'; skip.textContent = '跳过 · Esc';
-    const hint = document.createElement('button'); hint.type = 'button'; hint.className = 'sao-sound-hint'; hint.textContent = '浏览器已阻止自动声音 · 点击有声播放'; hint.hidden = true;
+    const skip = document.createElement('button'); skip.type = 'button'; skip.className = 'sao-skip'; skip.textContent = '点击任意位置跳过 · Esc';
+    const hint = document.createElement('button'); hint.type = 'button'; hint.className = 'sao-sound-hint'; hint.textContent = '浏览器已阻止自动声音 · 点击任意位置跳过'; hint.hidden = true;
     const previousFocus = document.activeElement, motion = matchMedia('(prefers-reduced-motion: reduce)');
     let done = false, worker = null, workerURL = null, renderer = null, frame = 0, timer = 0, epoch = 0, sound = null;
     let initTimer = 0, mode = 'static';
@@ -79,7 +79,7 @@
       Object.assign(view, { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 });
       if (worker) worker.postMessage({ type: 'resize', view });
     }
-    skip.addEventListener('click', finish);
+    root.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); finish(); }, true);
     document.addEventListener('keydown', onKey, true); document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('resize', onResize); motion.addEventListener('change', finish);
     window.addEventListener('pagehide', finish, { once: true });
@@ -176,7 +176,7 @@
       else frame = requestAnimationFrame(tick);
       timer = setTimeout(finish, 6500);
     }
-    hint.addEventListener('click', start);
+    // Any click dismisses the scene, including the muted autoplay hint.
     // Queue the worker and both sounds before returning to the host. No promise
     // or module-system barrier delays the DSH frontend loading behind this root.
     try {

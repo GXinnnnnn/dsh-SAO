@@ -36,11 +36,11 @@ d024cfb3ee2750f9bdb429ef4f8a77402d65aca65cccd1a4ce24a3b7112b9c72
 
 The source EXE is excluded from the public package. The icon is third-party material, not original artwork created by this project. Extraction and attribution do not establish redistribution permission; no confirmed authorization is asserted. The new-code MIT license does not cover this icon or its ICO/PNG representations.
 
-## Built-in wallpapers, previews and uploaded images
+## Built-in wallpapers, previews and uploaded media
 
 The nine built-in wallpapers come from separately supplied source images. The original four source files are `SAO (1).jpg`, `SAO (1).png`, `SAO (2).jpg` and `SAO (3).jpg`; preparation leaves the original images unchanged. [Wallpaper provenance](assets/wallpapers/provenance.json) records all nine source filenames, source and output SHA-256 values, and delivery dimensions. The [preparation script](source/prepare-wallpapers.py) documents conversion.
 
-Supplying images locally, resizing, converting to WebP, packaging or recording hashes does not grant copyright or redistribution rights. No license grant for these wallpapers or their depicted characters, artwork or marks is asserted. They are excluded from the new-code MIT license. Custom raster uploads are stored in the user's local browser IndexedDB and are not uploaded to a server by this feature; users and original rights holders retain their respective rights. This project grants no rights in uploaded images.
+Supplying images locally, resizing, converting to WebP, packaging or recording hashes does not grant copyright or redistribution rights. No license grant for these wallpapers or their depicted characters, artwork or marks is asserted. They are excluded from the new-code MIT license. Custom image and video uploads are stored in the user's local browser IndexedDB and are not uploaded to a server by this feature; users and original rights holders retain their respective rights. This project grants no rights in uploaded media.
 
 The [native](assets/animation-previews/native.webp) and [thin](assets/animation-previews/thin.webp) animation previews are renderer-generated `draw(2800)` frames on the shared 3800 ms startup timeline. [Preview provenance](assets/animation-previews/provenance.json) identifies the renderer sources and output hashes. They inherit the scene's attribution and rights limits; rendering previews creates no new third-party asset license.
 

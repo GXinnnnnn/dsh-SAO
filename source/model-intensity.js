@@ -27,19 +27,46 @@ function applySAOModelIntensity(ctx, React) {
   const resets = new Set();
   const moveKeys = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 
+  const preferencesKey = 'dsh-sao.preferences.v4';
+  function readMode() {
+    try {
+      return JSON.parse(window.localStorage.getItem(preferencesKey))?.featureMode === 'startup-only'
+        ? 'startup-only' : 'all';
+    } catch { return 'all'; }
+  }
+  let featureMode = readMode();
+  let modeGeneration = 0;
+  const modeListeners = new Set();
+  const subscribeMode = listener => { modeListeners.add(listener); return () => modeListeners.delete(listener); };
+  const getMode = () => featureMode;
+  function updateMode(mode) {
+    if (disposed || mode === featureMode) return;
+    featureMode = mode;
+    modeGeneration++;
+    for (const listener of modeListeners) listener();
+  }
+
   function describe(snapshot) {
     const selection = snapshot.current;
     const model = snapshot.groups?.find(group => group.id === selection?.provider)
       ?.models.find(item => item.id === selection?.model);
     const reasoning = model?.reasoning;
-    const efforts = (reasoning?.efforts ?? []).filter(level =>
+    const declared = (reasoning?.efforts ?? []).filter(level =>
       typeof level.id === 'string' && typeof level.name === 'string');
+    // Official ModelSelect offers an undefined effort (provider default) when
+    // the adapter does not advertise defaultEffort. It is a choice, not an error.
+    const efforts = declared.length && reasoning.defaultEffort === undefined
+      ? [{ id: undefined, name: '服务商默认' }, ...declared] : declared;
     const effective = selection?.reasoningEffort ?? reasoning?.defaultEffort;
-    const index = efforts.findIndex(level => level.id === effective);
+    const selectedIndex = efforts.findIndex(level => level.id === effective);
+    const defaultIndex = efforts.findIndex(level => level.id === reasoning?.defaultEffort);
+    // An old effort may not exist on the new model. Anchor the thumb without
+    // pretending this fallback is saved; choosing that same stop must still save.
+    const index = selectedIndex >= 0 ? selectedIndex : Math.max(0, defaultIndex);
     // Include the saved effort and catalog shape: changing either invalidates a drag.
     const signature = JSON.stringify([selection?.provider, selection?.model,
       selection?.reasoningEffort, reasoning?.defaultEffort, efforts.map(level => [level.id, level.name])]);
-    return { selection, efforts, index, signature };
+    return { selection, efforts, index, selectedIndex, signature };
   }
 
   function Intensity({ directory, sessionId, available }) {
@@ -95,7 +122,7 @@ function applySAOModelIntensity(ctx, React) {
     }, [directory, sessionId, model.signature]);
 
     const unsupported = model.efforts.length === 0;
-    const disabled = !available || !directory || !model.selection || model.index < 0 ||
+    const disabled = !available || !directory || !model.selection ||
       model.efforts.length < 2 || pending || snapshot.pending != null ||
       !['ready', 'error'].includes(snapshot.status);
     const index = draft ?? Math.max(0, model.index);
@@ -106,8 +133,8 @@ function applySAOModelIntensity(ctx, React) {
       setDraft(null);
     }
     function begin() {
-      if (disabled || disposed) return false;
-      if (interaction.current === null) interaction.current = { signature: model.signature, index: model.index };
+      if (disabled || disposed || featureMode !== 'all') return false;
+      if (interaction.current === null) interaction.current = { signature: model.signature, index: model.index, modeGeneration };
       return true;
     }
     function preview(event) {
@@ -120,16 +147,16 @@ function applySAOModelIntensity(ctx, React) {
     async function commit() {
       const gesture = interaction.current;
       interaction.current = null;
-      if (!gesture || disposed || !mounted.current || operation.current || disabled) return;
-      const live = describe(store.getSnapshot());
+      if (!gesture || disposed || featureMode !== 'all' || !mounted.current || operation.current || disabled) return;
       const liveSnapshot = store.getSnapshot();
-      if (gesture.signature !== live.signature || liveSnapshot.pending != null ||
+      const live = describe(liveSnapshot);
+      if (gesture.modeGeneration !== modeGeneration || gesture.signature !== live.signature || liveSnapshot.pending != null ||
           !['ready', 'error'].includes(liveSnapshot.status)) {
         setDraft(null);
         return;
       }
       const target = live.efforts[gesture.index];
-      if (!target || live.index === gesture.index) { setDraft(null); return; }
+      if (!target || live.selectedIndex === gesture.index) { setDraft(null); return; }
       const token = {};
       operation.current = token;
       setPending(true);
@@ -138,7 +165,7 @@ function applySAOModelIntensity(ctx, React) {
         const result = await directory.select({
           provider: live.selection.provider,
           model: live.selection.model,
-          reasoningEffort: target.id
+          ...(target.id === undefined ? {} : { reasoningEffort: target.id })
         });
         if (!result?.ok) throw new Error('selection-rejected');
       } catch {
@@ -170,14 +197,16 @@ function applySAOModelIntensity(ctx, React) {
     // direct/test rendering and addressed subagent sessions without issuing RPCs.
     if (!sessionId || !available || !directory) return null;
     if (unsupported && !failure) return null;
-    const unavailable = unsupported || model.index < 0;
-    const text = pending ? '保存中' : unavailable ? '强度不可用' : level?.name ?? '强度不可用';
+    const unavailable = unsupported;
+    const unmatched = !unsupported && model.selectedIndex < 0 && draft === null;
+    const text = pending ? '保存中' : unmatched ? '未匹配' : level?.name ?? '强度不可用';
     return h('div', {
       className: 'sao-model-intensity',
       'data-state': failure ? 'error' : pending ? 'pending' : 'ready',
       'aria-busy': pending,
-      title: failure || (unavailable ? '当前模型没有可用的思考强度档位' :
-        `思考强度：${level.name}；可用档位：${model.efforts.map(item => item.name).join('、')}`)
+      title: failure || (unavailable ? '当前模型没有可用的思考强度档位' : unmatched
+        ? `当前档位 ${model.selection.reasoningEffort ?? '默认'} 不在模型目录中，滑动可选择新档位；尚未更改模型设置`
+        : `思考强度：${level.name}；可用档位：${model.efforts.map(item => item.name).join('、')}`)
     },
     h('span', { className: 'sao-model-intensity__label', 'aria-hidden': true }, '强度'),
     h('span', { className: 'sao-model-intensity__slider' },
@@ -217,7 +246,7 @@ function applySAOModelIntensity(ctx, React) {
     // browser/theme and can introduce an opaque track or black ticks.
     h('span', { className: 'sao-model-intensity__ticks', 'aria-hidden': true },
       model.efforts.map((item, value) => h('i', {
-        key: item.id, style: { left: `${model.efforts.length > 1 ? value / (model.efforts.length - 1) * 100 : 50}%` }
+        key: item.id === undefined ? 'provider-default' : `effort:${item.id}`, style: { left: `${model.efforts.length > 1 ? value / (model.efforts.length - 1) * 100 : 50}%` }
       })))),
     h('output', { className: 'sao-model-intensity__value', 'aria-hidden': true, title: text }, text),
     h('span', { id: `${id}-levels`, className: 'sao-model-intensity__sr' },
@@ -232,10 +261,24 @@ function applySAOModelIntensity(ctx, React) {
   }
 
   function Entry(props) {
-    return h(Intensity, { ...props, key: props.sessionId ?? 'no-session' });
+    const mode = useSyncExternalStore(subscribeMode, getMode, getMode);
+    return mode === 'all' ? h(Intensity, { ...props, key: props.sessionId ?? 'no-session' }) : null;
   }
 
   return ctx.effect(() => {
+    const modeChanged = event => {
+      const mode = event.detail?.mode;
+      if (mode === 'all' || mode === 'startup-only') updateMode(mode);
+    };
+    const storageChanged = event => {
+      if (event.key === preferencesKey || event.key === null) updateMode(readMode());
+    };
+    window.addEventListener('dsh-sao-mode-change', modeChanged);
+    window.addEventListener('storage', storageChanged);
+    const removeModeListeners = () => {
+      window.removeEventListener('dsh-sao-mode-change', modeChanged);
+      window.removeEventListener('storage', storageChanged);
+    };
     const style = document.createElement('style');
     style.dataset.saoModelIntensity = '';
     style.textContent = `
@@ -315,12 +358,15 @@ function applySAOModelIntensity(ctx, React) {
         }
       }, Entry));
     } catch (error) {
+      removeModeListeners();
       style.remove();
       throw error;
     }
     return () => {
       if (disposed) return;
       disposed = true;
+      removeModeListeners();
+      modeListeners.clear();
       for (const reset of resets) reset();
       resets.clear();
       if (typeof unregister === 'function') unregister();

@@ -1,9 +1,9 @@
 {
   "name": "@local/dsh-sao-market",
-  "version": "3.0.0",
+  "version": "1.0.4",
   "private": true,
   "type": "module",
-  "description": "SAO风格DSH皮肤：双启动动画与角色语音、独立透明度、连续右栏液态玻璃与上下文叠层、可切换全界面/仅限会话的自定义壁纸及模型强度调节",
+  "description": "dsh-SAO：双 Link Start 启动动画与语音、可独立使用的启动模式、液态与磨砂玻璃、清晰的控件状态、本地图片／循环视频壁纸和模型思考强度滑条。",
   "author": "GXinnnnnn",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {

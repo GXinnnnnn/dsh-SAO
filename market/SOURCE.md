@@ -1,11 +1,11 @@
 # Source and build
 
-The root package is `@local/dsh-sao-link-start` and the standalone market package is `@local/dsh-sao-market`; both retain version `3.0.0` and provide the same features.
+The root package is `@local/dsh-sao-link-start` and the standalone market package is `@local/dsh-sao-market`; both use version `1.0.4` and provide the same features.
 
 The prebuilt runtime is included. `index.js` injects `startup.js` in the document head before frontend initialization. `client.js` registers the package with the DSH ModuleLoader and uses the host's React for settings, appearance and model intensity controls.
 
 - `source/startup.template.js`, `renderer.js`, `thin-renderer.js` and `worker.js` produce the startup runtime.
-- `source/settings-panel.js`, `appearance.js`, `liquid-glass.js` and `model-intensity.js` produce the client runtime.
+- `source/settings-panel.js`, `appearance.js`, `liquid-glass.js`, `control-states.js`, `video-wallpaper.js` and `model-intensity.js` produce the client runtime.
 - `assets/wallpapers/` contains the nine shipped wallpaper copies. `assets/animation-previews/` contains renderer-generated preview images; the adjacent provenance records identify their sources and hashes.
 
 Appearance defaults are accent `#8CC8F4` and wallpaper `builtin-3` (SAO · 03). Composer and component backgrounds keep their 10% transparency defaults. Settings sliders use compact, softly separated label/slider/value/reset rows and wrap in narrow panels without endpoint labels.
@@ -46,3 +46,23 @@ The script reads the three original WAV files under `SAO Utils 2/Packages/com.gp
 The optional `source/prepare-wallpapers.py` uses Pillow and separately supplied source images in a sibling `image` directory. It is unnecessary for the theme build; the prepared wallpapers are included.
 
 New integration code and the liquid-glass adaptation retain their respective MIT notices. Embedded audio, icons, wallpapers and other pre-existing material have separate rights and exclusions; see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md).
+
+## Feature isolation and video resources
+
+`featureMode` is `all` or `startup-only` in the existing v4 preferences. `dsh-sao-mode-change` notifies independent control and model modules. Startup-only removes the appearance stylesheet, owned DOM markers, wallpaper and liquid canvases, and unmounts the model slider without writing the host theme.
+
+Local MP4/WebM uploads are stored as a Blob plus one WebP poster in the existing IndexedDB store. Validation caps file size at 200 MiB, duration at 30 seconds, long edge at 5120px and short edge at 2880px, supporting 4K/5K landscape and portrait media with bounded metadata/frame waits and cleanup on every path. One native muted looping player supplies motion; the liquid shader samples only a static poster whose long edge is at most 1600px. Hidden pages, unfocused windows and zero wallpaper opacity pause playback. Reduced-motion, static quality and inactive video selection unload the media source. No promise of a fixed CPU/GPU cost or maximum source framerate is made; source videos are not transcoded.
+
+The conversation header is the host's native `[data-conversation-tabs]` view slot: `ui-chat` registers Chat, `ui-trajectory` registers Trajectory, `dsh-context` registers Context/Fleet, and the official experimental statistics client registers Stats. SAO styles these native tab semantics without replacing view registration or navigation. Composer readouts are the official `ui-chat` StatsPills and `ui-conversation` ContextMeter; SAO locally promotes secondary/tertiary ink to the active theme's primary ink and uses weight 600. The verified legacy `.GRgSLq_dock` fallback covers hosts before `data-composer-dock`; startup-only removes all of these rules.
+
+Reference designs: [DSH Transparent UI](https://github.com/WYH66666666/DSH-Transparent-UI-Plugin) and [kimino theme](https://github.com/niiang/dsh-kimino-theme). Control states use verified native semantics and limited class fallbacks. Future native markup changes may require updating those fallbacks.
+
+Performance references: [HTML video](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/video), [Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API), [prefers-reduced-motion](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
+
+Version 1.0.2 narrows the global control rules: native menu roles and the entire SAO settings tree are excluded. Header view pills explicitly own their compact geometry and bottom spacing; the composer dock stays on one line, uses horizontal scrolling when constrained, and preserves hidden/empty/pocket opt-out behavior. Settings surfaces follow the context sidebar's light grouping and theme-accent treatment.
+
+Version 1.0.3 gives settings a rounded translucent glass surface. Mount-owned styles only affect the settings dialog while it contains the SAO page; switching sections releases them. The real host shares one 32px frame and a CSS backdrop, while its inner root stays transparent. The host is excluded from the GPU liquid set, and the shared window alpha/filter tokens honor the transparency endpoint. Standalone settings keep a 28px glass frame; internal groups use 22px corners and neutral hairlines, with 16px controls and small check markers. Startup-only keeps the settings page's own presentation while removing the global appearance layer.
+
+Version 1.0.4 gives settings a restrained accent tint while keeping their transparent glass material. Conversation header tabs use a separate recipe from generic controls: a transparent group, a 1.5% resting fill, a 13% selected tint, and one 14%-alpha one-pixel concentric inset stroke. Removing generic selected styling prevents the old two-pixel bottom strip and top light from stacking under the circular stroke. Hover/pressed change fill without changing the stroke geometry; keyboard focus and forced colors retain dedicated visible indicators.
+
+Subsequent patch releases increment to 1.0.5; major new features increment to 1.1.0.
