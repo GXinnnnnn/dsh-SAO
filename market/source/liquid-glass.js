@@ -428,13 +428,9 @@ function createSAOLiquidGlass() {
     prune();
     const viewWidth = Math.max(1, win.innerWidth), viewHeight = Math.max(1, win.innerHeight);
     const rows = [], toHide = [];
-    // Restore measurable canvases in one write phase before any geometry reads.
-    for (const [host, entry] of hosts) {
-      if ((surfaceOpacities.get(host) ?? opacity) === 0) continue;
-      if (entry.canvas.parentElement !== host) host.appendChild(entry.canvas);
-      if (entry.canvas.hidden) entry.canvas.hidden = false;
-    }
-    // Read all geometry before changing backing sizes or presenting layers.
+    // Offscreen surfaces stay hidden. Unhiding every canvas before measuring
+    // its host used to create hidden/visible mutations on every scroll pass.
+    const visible = [];
     for (const [host, entry] of hosts) {
       const surfaceOpacity = surfaceOpacities.get(host) ?? opacity;
       if (surfaceOpacity === 0) { toHide.push(entry); continue; }
@@ -445,6 +441,14 @@ function createSAOLiquidGlass() {
         toHide.push(entry);
         continue;
       }
+      visible.push({host, entry, style, surfaceOpacity});
+    }
+    for (const {host, entry} of visible) {
+      if (entry.canvas.parentElement !== host) host.appendChild(entry.canvas);
+      if (entry.canvas.hidden) entry.canvas.hidden = false;
+    }
+    // Read all canvas geometry together after restoring only visible surfaces.
+    for (const {host, entry, style, surfaceOpacity} of visible) {
       // Measure the actual padding-box canvas; borders need not equal the host box.
       const rect = entry.canvas.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) { toHide.push(entry); continue; }
@@ -561,7 +565,13 @@ function createSAOLiquidGlass() {
   const media = typeof win.matchMedia === 'function' ? win.matchMedia('(prefers-color-scheme: dark)') : null;
   if (media?.addEventListener) on(media, 'change', schedule);
   on(win, 'resize', schedule, { passive: true });
-  on(doc, 'scroll', schedule, { capture: true, passive: true });
+  on(doc, 'scroll', event => {
+    const target = event.target;
+    // Local settings/list scrolling cannot move unrelated glass hosts. Only
+    // a viewport scroll or an ancestor of a surface needs new geometry.
+    if (target instanceof win.Element && ![...hosts.keys()].some(host => target.contains(host))) return;
+    schedule();
+  }, { capture: true, passive: true });
   on(doc, 'visibilitychange', () => { if (doc.hidden) cancel(); else schedule(); });
   if (win.visualViewport) {
     on(win.visualViewport, 'resize', schedule, { passive: true });

@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-sao-link-start",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "type": "module",
   "description": "dsh-SAO：双 Link Start 启动动画与语音、可独立使用的启动模式、液态与磨砂玻璃、清晰的控件状态、本地图片／循环视频壁纸和模型思考强度滑条。",

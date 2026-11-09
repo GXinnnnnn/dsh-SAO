@@ -5,13 +5,42 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   const instanceKey = Symbol.for('dsh.sao.appearance.v4');
   window[instanceKey]?.dispose?.();
   // Retire DOM left by versions that did not expose a disposable controller.
-  for (const el of document.querySelectorAll('style[data-sao-appearance],[data-sao-wallpaper],[data-sao-liquid]')) el.remove();
+  for (const el of document.querySelectorAll('style[data-sao-appearance],style[data-sao-palette],[data-sao-wallpaper],[data-sao-liquid]')) el.remove();
   const materialAttributes = ['data-sao-material','data-sao-positioned','data-sao-surface','data-sao-zone','data-sao-core-surface'];
   for (const el of document.querySelectorAll('[data-sao-context]')) el.removeAttribute('data-sao-context');
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
   const KEY = 'dsh-sao.preferences.v4';
   const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallpaperScope: 'full', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
+  const accentDefaults = {light: defaults.accent, dark: defaults.accent};
+  defaults.accentProfiles = {...accentDefaults};
+  const themeMedia = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  const validAccent = value => value === null || typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+  const cleanAccent = value => value === null ? null : value.toUpperCase();
+  function themeSnapshot() { return ctx.theme.getTheme?.() || {}; }
+  function effectiveTheme(preference) {
+    const snapshot = themeSnapshot();
+    // Native effective state wins in system mode (and during host theme events).
+    for (const key of ['effective', 'resolved', 'mode', 'theme', 'colorScheme']) if (['light','dark'].includes(snapshot[key])) return snapshot[key];
+    if (typeof snapshot.dark === 'boolean') return snapshot.dark ? 'dark' : 'light';
+    const mode = snapshot.preference || preference;
+    if (mode === 'light' || mode === 'dark') return mode;
+    // This native marker is available on installed DSH versions whose service
+    // exposes only the preference. Attribute reads do not force layout.
+    if (document.body?.hasAttribute('data-ds-dark-theme')) return ['false','light'].includes(document.body.getAttribute('data-ds-dark-theme')) ? 'light' : 'dark';
+    return themeMedia?.matches ? 'dark' : 'light';
+  }
+  function normalizeAccents(value, legacy) {
+    const profiles = {...accentDefaults};
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const name of ['light','dark']) if (Object.hasOwn(value, name) && validAccent(value[name])) profiles[name] = cleanAccent(value[name]);
+    } else if (validAccent(legacy)) {
+      // Before profiles existed accent applied globally, including explicit null.
+      // Seed both modes so upgrading preserves the user's existing appearance.
+      profiles.light = profiles.dark = cleanAccent(legacy);
+    }
+    return profiles;
+  }
   const bounded = (v, fallback, min, max) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
   const rightSceneModes = ['off','frosted','liquid'];
   const rightSceneDefaults = mode => ({opacity: mode === 'liquid' ? .70 : .50, blur: 0});
@@ -49,6 +78,8 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     return profiles;
   }
   function settingDefault(key, current) {
+    if (key === 'accent') return accentDefaults[effectiveTheme(current.theme)];
+    if (key === 'accentProfiles') return {...accentDefaults};
     if (key === 'opacity') return current.glass === 'frosted' ? defaults.frostOpacity : defaults.liquidOpacity;
     if (key === 'headerOpacity') return headerSceneDefaults(current.glass).opacity;
     if (key === 'rightOpacity') return rightSceneDefaults(current.rightGlass).opacity;
@@ -93,6 +124,8 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     n.conversationBlur = bounded(p.conversationBlur, 0, 0, 24);
     if (typeof p.fontFamily === 'string' && p.fontFamily.trim() && p.fontFamily.length <= 160 && !/[\x00-\x1f]/.test(p.fontFamily)) n.fontFamily = p.fontFamily.trim();
     if (['system','light','dark'].includes(p.theme)) n.theme = p.theme;
+    n.accentProfiles = normalizeAccents(p.accentProfiles, p.accent);
+    n.accent = n.accentProfiles[effectiveTheme(n.theme)];
     n.opacity = bounded(p.opacity, n.glass === 'frosted' ? n.frostOpacity : n.liquidOpacity, 0, 1);
     n.headerSceneProfiles = normalizeRightScenes(p.headerSceneProfiles, headerSceneDefaults);
     // Migrate the former .40 initial value; preserve other explicit legacy choices.
@@ -104,6 +137,8 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   }
   function patchPreferences(current, patch) {
     const next = { ...current, ...patch };
+    next.accentProfiles = normalizeAccents(next.accentProfiles, current.accent);
+    if (Object.hasOwn(patch, 'accent') && validAccent(patch.accent)) next.accentProfiles[effectiveTheme(current.theme)] = cleanAccent(patch.accent);
     const profiles = normalizeRightScenes(next.rightSceneProfiles);
     if (!current.rightLinked && (next.rightLinked !== false || next.rightGlass !== current.rightGlass)) rememberRightScene(profiles, current.rightGlass, current.rightOpacity, current.rightBlur);
     const mode = rightSceneModes.includes(next.rightGlass) ? next.rightGlass : defaults.rightGlass;
@@ -123,9 +158,10 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     return normalize(next);
   }
   let preferences; try { preferences = normalize(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { preferences = normalize({}); }
-  let disposed = false, notice = '', tokenDispose = null, customURL = null, customPosterURL = null, customKind = 'image', customMeta = null, customName = '', queued = 0, revision = 0, uploadRevision = 0;
+  let disposed = false, notice = '', customURL = null, customPosterURL = null, customKind = 'image', customMeta = null, customName = '', queued = 0, revision = 0, uploadRevision = 0;
   const subscribers = new Set(), panelDisposers = new Set(), touched = new Set(), componentTouched = new Set(), adaptiveObserved = new Set();
   const style = document.createElement('style'); style.dataset.saoAppearance = '4'; document.head.append(style);
+  const paletteStyle = document.createElement('style'); paletteStyle.dataset.saoPalette = '';
   const background = document.createElement('div'); background.dataset.saoWallpaper = ''; background.setAttribute('aria-hidden','true');
   background.style.cssText = 'position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1';
   const wallpaperClip = document.createElement('div'); wallpaperClip.dataset.saoWallpaperClip = ''; background.append(wallpaperClip);
@@ -430,11 +466,9 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const unique = [...new Set(nodes)];
     return unique.filter(el => el instanceof HTMLElement && !el.closest('[hidden],[aria-hidden="true"]') && !el.matches(excluded) && !el.matches(componentSelector) && !el.closest('[data-whale],[data-pet],[data-sao-browser-pane]') && el.getBoundingClientRect().width > 0 && (windows.includes(el) || getComputedStyle(el).visibility === 'visible') && !(el.matches('[data-sidebar-right-panel], [data-slot="rightbar.session"] > *') && unique.some(inner => inner !== el && el.contains(inner)))).filter((el,index) => windows.includes(el) || index < windows.length + 12);
   }
-  let accentCSS = '';
   function applyTokens() {
-    tokenDispose?.(); tokenDispose = null;
+    if (preferences.featureMode === 'startup-only') { paletteStyle.remove(); return; }
     const declarations = [];
-    if (preferences.featureMode === 'startup-only') { accentCSS = ''; return; }
     const luminance = hex => {
       const c = [1,3,5].map(i => parseInt(hex.slice(i,i+2),16)/255).map(v => v <= .04045 ? v/12.92 : ((v+.055)/1.055)**2.4);
       return c[0]*.2126+c[1]*.7152+c[2]*.0722;
@@ -448,7 +482,12 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
       const primary = dark ? '#FFFFFF' : '#000000';
       declarations.push(`--dsw-alias-bg-base:${hex}!important;--dsw-alias-bg-layer-1:color-mix(in srgb,${hex} 96%,${lift} 4%)!important;--dsw-alias-bg-layer-2:color-mix(in srgb,${hex} 92%,${lift} 8%)!important;--dsw-alias-bg-layer-3:color-mix(in srgb,${hex} 88%,${lift} 12%)!important;--dsw-menu-surface-fill:var(--dsw-alias-bg-layer-1)!important;--dsw-specific-menu:var(--dsw-alias-bg-layer-1)!important;--dsw-alias-settings-card-fill:var(--dsw-alias-bg-layer-2)!important;--dsw-alias-markdown-code-block:var(--dsw-alias-bg-layer-2)!important;--dsw-alias-label-primary:${primary}!important;--dsw-alias-label-secondary:color-mix(in srgb,${primary} 68%,${hex} 32%)!important`);
     }
-    accentCSS = declarations.length ? `body{${declarations.join(';')}}` : '';
+    const css = declarations.length ? `body{${declarations.join(';')}}` : '';
+    // Palette edits do not rebuild geometry/material CSS or dispose/reinstall
+    // host tokens. CSS variables update their existing consumers directly.
+    if (paletteStyle.textContent !== css) paletteStyle.textContent = css;
+    if (css && !paletteStyle.isConnected) document.head.append(paletteStyle);
+    else if (!css) paletteStyle.remove();
   }
   let modeAnnounced = null, modeGeneration = 0;
   function announceMode() {
@@ -460,8 +499,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   function suspendAppearance() {
     videoWallpaper.set({enabled:false});
     cancelAnimationFrame(queued); queued = 0;
-    themeTransition?.skipTransition?.(); themeAnimation?.cancel(); themeTransitionStyle?.remove();
-    document.documentElement.removeAttribute('data-sao-switching');
+    paletteStyle.remove();
     liquid.update({enabled:false,surfaces:[]});
     style.remove(); background.remove();
     frameHost?.removeAttribute('data-sao-wall-frame'); frameHost?.removeAttribute('data-sao-wall-positioned'); frameHost = null;
@@ -478,7 +516,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     resizeObserver?.disconnect(); adaptiveObserved.clear(); contextCardsObserved.clear(); contextViewportsObserved.clear(); rightPanesObserved.clear();
   }
   // A failed material pass must remain observable without taking down settings.
-  const runtimeState = {build:'sao-1.0.4',passes:0,error:null};
+  const runtimeState = {build:'sao-1.0.5',passes:0,error:null};
   function sync() {
     if (disposed) return;
     announceMode();
@@ -515,7 +553,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const glass = p.glass !== 'off' || rightGlass !== 'off' || contextGlass !== 'off', alpha = p.opacity, blur = p.conversationBlur, windowAlpha = windowSurfaceOpacity(p);
     const materialBase = 'var(--dsw-alias-bg-base,#f4f6f9)';
     const readoutDock = 'body :is([data-slot="main.conversation"],[data-slot="rightbar"]) :is([data-composer-dock],.GRgSLq_dock,[data-mobile-nav="stats"])';
-    lastStyle = `${accentCSS}
+    lastStyle = `
 @font-face{font-family:"SAO Local Rounded";src:local("方正兰亭圆_准"),local("方正兰亭圆_GBK_准"),local("FZLanTingYuan-M-GBK");font-display:swap;font-weight:400}
 body{--sao-settings-window-alpha:${windowAlpha};--sao-settings-host-filter:${windowAlpha>0&&glass?'blur(24px) saturate(1.12)':'none'};--sao-font:${JSON.stringify(p.fontFamily === '方正兰亭圆_准' ? 'SAO Local Rounded' : p.fontFamily)},"Microsoft YaHei",system-ui,sans-serif;--dsh-font-family-text:var(--sao-font)!important;--dsw-font-family:var(--sao-font)!important;font-family:var(--sao-font);font-weight:400;font-synthesis:none;--sao-accent:var(--dsw-alias-brand-primary);--dsw-specific-sidebar-fill:color-mix(in srgb,var(--dsw-alias-bg-base) 94%,var(--sao-accent) 6%)!important}
 /* Keep the entire dock on one baseline. It owns horizontal scrolling when
@@ -704,53 +742,58 @@ ${saoBetterSidebarCSS(materialBase)}
     })) schedule();
   });
   observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
-  const onStorage = event => { if (event.key === KEY) { try { preferences = normalize(JSON.parse(event.newValue || '{}')); revision++; applyTokens(); sync(); notify(); } catch {} } };
+  const materialKeys = Object.keys(defaults).filter(key => !['startup','animation','voice','sound','volume','accent','accentProfiles','theme'].includes(key));
+  const samePreference = (a, b, key) => key.endsWith('SceneProfiles') || key === 'accentProfiles' ? JSON.stringify(a[key]) === JSON.stringify(b[key]) : Object.is(a[key], b[key]);
+  const onStorage = event => {
+    if (disposed || event.key !== KEY && event.key !== null) return;
+    try {
+      const previous = preferences;
+      const incoming = event.key === null ? {} : JSON.parse(event.newValue || '{}');
+      preferences = normalize({...incoming, theme: readThemePreference()});
+      revision++; announceMode(); applyTokens();
+      if (previous.featureMode !== preferences.featureMode) sync();
+      else if (materialKeys.some(key => !samePreference(previous, preferences, key))) schedule();
+      notify();
+    } catch { /* Ignore malformed external data without replacing current preferences. */ }
+  };
   window.addEventListener('storage', onStorage);
-  const onContextScroll = event => { if (event.target instanceof Element && (event.target.closest('[data-sao-wall-column]') || event.target.closest(contextRootSelector) || [...contextTouched].some(root => event.target.contains(root)))) schedule(); };
+  const onContextScroll = event => {
+    const target = event.target;
+    if (!(target instanceof Element) || target.closest('[data-sao-settings],[data-shortcut-modal="settings"]')) return;
+    if (target.closest('[data-sao-wall-column]') || target.closest(contextRootSelector) || [...contextTouched].some(root => target.contains(root))) schedule();
+  };
   document.addEventListener('scroll',onContextScroll,{capture:true,passive:true});
   const onVisibility = () => { if (document.hidden) { cancelAnimationFrame(queued); queued = 0; } else schedule(); };
   document.addEventListener('visibilitychange', onVisibility);
-  function readThemePreference() { const value = ctx.theme.getTheme?.()?.preference; return ['system','light','dark'].includes(value) ? value : preferences.theme; }
+  function readThemePreference() { const value = themeSnapshot().preference; return ['system','light','dark'].includes(value) ? value : preferences.theme; }
   preferences.theme = readThemePreference();
-  ctx.on('theme/change', () => { preferences.theme = readThemePreference(); schedule(); notify(); });
-  let themeTransition = null, themeAnimation = null, themeTransitionStyle = null, themeRequestRevision = 0;
-  async function changeTheme(mode, origin) {
+  let activeThemeMode = effectiveTheme(preferences.theme), themeRequestRevision = 0;
+  preferences.accent = preferences.accentProfiles[activeThemeMode];
+  function reconcileTheme() {
+    if (disposed) return;
+    const mode = effectiveTheme(readThemePreference()), changed = mode !== activeThemeMode;
+    const preference = readThemePreference(), preferenceChanged = preference !== preferences.theme;
+    activeThemeMode = mode; preferences.theme = preference;
+    preferences.accent = preferences.accentProfiles[mode];
+    applyTokens();
+    // The native theme event and changeTheme share one queued material refresh.
+    // Repeated identical events still notify settings but cannot replay geometry.
+    if (changed) schedule();
+    if (changed || preferenceChanged) notify();
+  }
+  ctx.on('theme/change', reconcileTheme);
+  themeMedia?.addEventListener?.('change', reconcileTheme);
+  async function changeTheme(mode, origin, guard = () => true) {
     if (!['system','light','dark'].includes(mode) || disposed || preferences.featureMode === 'startup-only') return;
     const generation = modeGeneration, request = ++themeRequestRevision;
-    const isCurrent = () => !disposed && generation === modeGeneration && request === themeRequestRevision && preferences.featureMode === 'all';
-    const change = () => { if (!isCurrent()) return; ctx.theme.setTheme(mode); preferences.theme = readThemePreference(); persist(); sync(); };
-    if (mode === readThemePreference()) return;
-    themeTransition?.skipTransition?.(); themeAnimation?.cancel();
-    if (!document.startViewTransition || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) { change(); return; }
-    const r = (origin?.closest?.('.sao-choice') || origin)?.getBoundingClientRect?.();
-    const x = r ? r.left + r.width/2 : innerWidth/2, y = r ? r.top + r.height/2 : innerHeight/2;
-    const radius = Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));
-    const rule = document.createElement('style');
-    rule.textContent = '::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}::view-transition-old(root){z-index:1}::view-transition-new(root){z-index:2}[data-sao-switching] *,[data-sao-switching] *::before,[data-sao-switching] *::after{transition:none!important}';
-    document.documentElement.setAttribute('data-sao-switching','');
-    document.head.append(rule); themeTransitionStyle = rule;
-    let changed = false, updateError = null;
-    const update = () => { if (!changed && isCurrent()) { changed = true; try { change(); } catch (error) { updateError = error; throw error; } } };
-    let transition;
-    const cancelTransition = () => { themeAnimation?.cancel(); transition?.skipTransition?.(); };
-    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-    const onMotion = () => { if (reducedMotion.matches) cancelTransition(); };
-    const onVisibility = () => { if (document.hidden) cancelTransition(); };
-    window.addEventListener('resize', cancelTransition); document.addEventListener('visibilitychange', onVisibility); reducedMotion.addEventListener?.('change', onMotion);
-    try {
-      try { transition = document.startViewTransition(update); } catch (error) { if (updateError) throw updateError; update(); return; }
-      themeTransition = transition;
-      // Both native lifecycle promises reject when the update callback fails or is skipped.
-      // The ready branch below still forwards the service error to the settings control.
-      transition.updateCallbackDone?.catch(() => {}); transition.finished?.catch(() => {});
-      try { await transition.ready; } catch { if (updateError) throw updateError; update(); return; }
-      if (disposed) { transition.skipTransition(); return; }
-      themeAnimation = document.documentElement.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${radius}px at ${x}px ${y}px)`]}, {duration:440,easing:'cubic-bezier(.2,.75,.25,1)',fill:'both',pseudoElement:'::view-transition-new(root)'});
-      try { await themeAnimation.finished; } catch { /* Cancellation completes the new palette immediately. */ }
-    } finally {
-      transition?.skipTransition?.(); rule.remove(); window.removeEventListener('resize',cancelTransition); document.removeEventListener('visibilitychange',onVisibility); reducedMotion.removeEventListener?.('change',onMotion);
-      if (themeTransitionStyle === rule) { document.documentElement.removeAttribute('data-sao-switching'); themeTransition = null; themeAnimation = null; themeTransitionStyle = null; }
-    }
+    const isCurrent = () => !disposed && generation === modeGeneration && request === themeRequestRevision && preferences.featureMode === 'all' && guard();
+    // A microtask merges rapid requests and preserves cancellation/reset races
+    // without capturing or clipping a full-screen view-transition snapshot.
+    await Promise.resolve();
+    if (!isCurrent() || mode === readThemePreference()) return;
+    await ctx.theme.setTheme(mode);
+    if (!isCurrent()) return;
+    reconcileTheme(); persist();
   }
   function dbRequest(mode, task) {
     return new Promise((resolve, reject) => {
@@ -787,7 +830,7 @@ ${saoBetterSidebarCSS(materialBase)}
     } catch (error) { if (preferences.wallpaper === 'custom') storageNotice(error); }
   }
   const api = {
-    get: () => ({ ...preferences, rightSceneProfiles: normalizeRightScenes(preferences.rightSceneProfiles), contextSceneProfiles: normalizeRightScenes(preferences.contextSceneProfiles, contextSceneDefaults), headerSceneProfiles: normalizeRightScenes(preferences.headerSceneProfiles, headerSceneDefaults) }), status: () => notice,
+    get: () => ({ ...preferences, accentProfiles: {...preferences.accentProfiles}, rightSceneProfiles: normalizeRightScenes(preferences.rightSceneProfiles), contextSceneProfiles: normalizeRightScenes(preferences.contextSceneProfiles, contextSceneDefaults), headerSceneProfiles: normalizeRightScenes(preferences.headerSceneProfiles, headerSceneDefaults) }), status: () => notice,
     getDefault: key => Object.hasOwn(defaults, key) ? settingDefault(key, preferences) : undefined,
     get animationPreviews() { return animationPreviews; },
     get wallpapers() { return [...builtins, ...(customURL ? [{id:'custom',name:customName,kind:customKind,meta:customMeta,src:customPosterURL || customURL}] : [])]; },
@@ -796,8 +839,13 @@ ${saoBetterSidebarCSS(materialBase)}
     set(patch) {
       if (disposed) return;
       const normalized = patchPreferences(preferences, patch);
-      if (Object.keys(defaults).every(key => key.endsWith('SceneProfiles') ? JSON.stringify(preferences[key]) === JSON.stringify(normalized[key]) : Object.is(preferences[key], normalized[key]))) return;
-      preferences = normalized; revision++; announceMode(); if (Object.hasOwn(patch,'accent') || Object.hasOwn(patch,'surfaceColor') || Object.hasOwn(patch,'featureMode')) applyTokens(); persist(); if (Object.hasOwn(patch,'featureMode')) sync(); else schedule();
+      const changed = Object.keys(defaults).filter(key => !samePreference(preferences, normalized, key));
+      if (!changed.length) return;
+      const appearanceChanged = changed.some(key => materialKeys.includes(key));
+      preferences = normalized; revision++; announceMode();
+      if (changed.some(key => ['accent','accentProfiles','surfaceColor','featureMode'].includes(key))) applyTokens();
+      persist();
+      if (changed.includes('featureMode')) sync(); else if (appearanceChanged) schedule();
       if (patch.startup === false) window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();
     },
     resetSetting(key, origin) {
@@ -832,7 +880,14 @@ ${saoBetterSidebarCSS(materialBase)}
       api.set({wallpaper:'custom',wallX:50,wallY:50,wallScale:100}); sync(); notify();
     },
     async removeUpload() { const current = ++uploadRevision; await dbRequest('readwrite', s => s.delete('custom')); if (disposed || current !== uploadRevision) return; releaseCustom(); if (preferences.wallpaper === 'custom') api.set({wallpaper:'none'}); sync(); notify(); },
-    async reset() { const current = revision; await changeTheme(defaults.theme); if (disposed || current !== revision) return; preferences = normalize({ ...defaults, theme: readThemePreference() }); announceMode(); applyTokens(); persist(); sync(); }
+    async reset() {
+      const current = revision, task = changeTheme(defaults.theme, null, () => current === revision), request = themeRequestRevision;
+      await task;
+      if (disposed || current !== revision || request !== themeRequestRevision) return;
+      preferences = normalize({ ...defaults, accentProfiles: {...accentDefaults}, theme: readThemePreference() });
+      activeThemeMode = effectiveTheme(preferences.theme); announceMode(); applyTokens(); persist();
+      cancelAnimationFrame(queued); queued = 0; sync();
+    }
   };
   function Settings() {
     const ref = React.useRef(null);
@@ -872,13 +927,13 @@ ${saoBetterSidebarCSS(materialBase)}
   function dispose() {
     if (disposed) return; disposed = true; uploadRevision++;
     cancelAnimationFrame(queued); observer.disconnect(); resizeObserver?.disconnect(); adaptiveObserved.clear(); contextCardsObserved.clear(); contextViewportsObserved.clear(); for (const [nodes,attribute] of [[rightPanesTouched,'data-sao-right-pane'],[rightRootsTouched,'data-sao-right-root'],[browserPanesTouched,'data-sao-browser-pane']]) { for (const node of nodes) node.removeAttribute(attribute); nodes.clear(); } rightPanesObserved.clear(); document.removeEventListener('scroll',onContextScroll,true); window.removeEventListener('storage',onStorage); document.removeEventListener('visibilitychange',onVisibility);
-    themeTransition?.skipTransition?.(); themeAnimation?.cancel(); themeTransitionStyle?.remove();
+    themeMedia?.removeEventListener?.('change', reconcileTheme);
     frameHost?.removeAttribute('data-sao-wall-frame'); frameHost?.removeAttribute('data-sao-wall-positioned');
     for (const el of layoutTouched) { el.removeAttribute('data-sao-wall-column'); el.removeAttribute('data-sao-wall-right'); el.removeAttribute('data-sao-browser-only'); el.removeAttribute('data-sao-main-joined'); el.removeAttribute('data-sao-right-joined'); } layoutTouched.clear();
     for (const el of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) el.removeAttribute(attr); shellTouched.clear();
     for (const el of componentTouched) { el.removeAttribute('data-sao-component'); el.style.removeProperty('--sao-component-alpha'); } componentTouched.clear();
     for (const el of contextTouched) el.removeAttribute('data-sao-context'); contextTouched.clear();
-    tokenDispose?.(); videoWallpaper.dispose(); liquid.dispose(); style.remove(); background.remove(); image.onload = image.onerror = null;
+    videoWallpaper.dispose(); liquid.dispose(); paletteStyle.remove(); style.remove(); background.remove(); image.onload = image.onerror = null;
     if (customURL) URL.revokeObjectURL(customURL); if (customPosterURL) URL.revokeObjectURL(customPosterURL); for (const cleanup of panelDisposers) cleanup(); panelDisposers.clear(); subscribers.clear();
     for (const el of touched) { el.style.removeProperty('--sao-surface-alpha'); el.removeAttribute('data-sao-material'); el.removeAttribute('data-sao-positioned'); el.removeAttribute('data-sao-surface'); el.removeAttribute('data-sao-zone'); } touched.clear();
     window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();

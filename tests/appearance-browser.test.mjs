@@ -236,7 +236,7 @@ test('appearance isolation and async theme/reset races in native Edge', {
     assert.equal(result.zero.filter,'none','window transparency endpoint removes host blur');
     assert.deepEqual(result.untouched,result.before,'other settings retain their native surface'); assert.deepEqual(result.released,result.before,'leaving SAO removes its glass frame');
   });
-  await t.test('all/startup/all invalidates the skipped native theme callback permanently', async t => {
+  await t.test('all/startup/all invalidates a queued theme request permanently', async t => {
     const page = await pageFor(t, { featureMode: 'all' });
     const result = await page.evaluate(async () => {
       const task = api.setTheme('dark');
@@ -244,26 +244,26 @@ test('appearance isolation and async theme/reset races in native Edge', {
       await task; await settleTransitions();
       return { calls: themeCalls, theme: activeTheme, stored: stored(), transitions: nativeTransitions.length, switching: snapshot().switching };
     });
-    assert.ok(result.transitions > 0); assert.deepEqual(result.calls, []);
+    assert.equal(result.transitions, 0, 'theme changes never capture the full screen'); assert.deepEqual(result.calls, []);
     assert.equal(result.theme, 'light'); assert.equal(result.stored.theme, 'light'); assert.equal(result.switching, false);
   });
-  await t.test('a newer native theme request wins without applying the skipped older request', async t => {
+  await t.test('a newer native theme request wins without applying the queued older request', async t => {
     const page = await pageFor(t, { featureMode: 'all' });
     const result = await page.evaluate(async () => {
       await Promise.all([api.setTheme('dark'), api.setTheme('system')]); await settleTransitions();
       return { calls: themeCalls, theme: activeTheme, persisted: stored().theme, transitions: nativeTransitions.length };
     });
-    assert.equal(result.transitions, 2); assert.deepEqual(result.calls, ['system']);
+    assert.equal(result.transitions, 0, 'rapid theme changes avoid full-screen snapshots'); assert.deepEqual(result.calls, ['system']);
     assert.equal(result.theme, 'system'); assert.equal(result.persisted, 'system');
   });
-  await t.test('reset respects the mode selected while its native theme transition is pending', async t => {
+  await t.test('reset respects the mode selected while its theme request is queued', async t => {
     const page = await pageFor(t, { featureMode: 'all' }, 'dark');
     const result = await page.evaluate(async () => {
       const task = api.reset(); api.set({ featureMode: 'startup-only' });
       await task; await settleTransitions();
       return { state: snapshot(), calls: themeCalls, stored: stored(), transitions: nativeTransitions.length };
     });
-    assert.ok(result.transitions > 0); assertSuspended(result.state);
+    assert.equal(result.transitions, 0, 'reset avoids full-screen snapshots'); assertSuspended(result.state);
     assert.deepEqual(result.calls, []); assert.equal(result.stored.featureMode, 'startup-only');
     assert.equal(result.stored.accent, '#FF0000');
   });

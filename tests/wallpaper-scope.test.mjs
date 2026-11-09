@@ -4,14 +4,21 @@ import test from 'node:test';
 const source=readFileSync(new URL('../source/appearance.js',import.meta.url),'utf8');
 const start=source.indexOf('  const defaults = '),end=source.indexOf('  let preferences;');
 const apiStart=source.indexOf('  const api = {'),apiEnd=source.indexOf('    setTheme: changeTheme,',apiStart);
-const reset=source.match(/^    async reset\(\) \{[^\n]+\}/m)?.[0];
-assert.ok(start>=0&&end>start&&apiStart>end&&apiEnd>apiStart&&reset);
-const factory=new Function('builtins','initial',`${source.slice(start,end)}
-let preferences=normalize(initial),disposed=false,notice='',revision=0,saves=0;
+const resetStart=source.indexOf('    async reset() {',apiStart),resetEnd=source.indexOf('\n  };',resetStart);
+const comparisonStart=source.indexOf('  const materialKeys = '),comparisonEnd=source.indexOf('\n  const onStorage',comparisonStart);
+assert.ok(start>=0&&end>start&&apiStart>end&&apiEnd>apiStart&&resetStart>apiEnd&&resetEnd>resetStart&&comparisonStart>=0&&comparisonEnd>comparisonStart);
+const factory=new Function('builtins','initial',`
+// Supply only the native theme/environment inputs required by preference
+// normalization. Geometry and rendering remain outside this pure fixture.
+const ctx={theme:{getTheme:()=>({})}},window={matchMedia:()=>({matches:false})},document={body:{hasAttribute:()=>false}};
+const cancelAnimationFrame=()=>{};
+${source.slice(start,end)}
+${source.slice(comparisonStart,comparisonEnd)}
+let preferences=normalize(initial),disposed=false,notice='',revision=0,saves=0,themeRequestRevision=0,queued=0,activeThemeMode=effectiveTheme(preferences.theme);
 const announceMode=()=>{},applyTokens=()=>{},persist=()=>{saves++;},schedule=()=>{},sync=()=>{};
 const readThemePreference=()=>preferences.theme,changeTheme=async()=>{};
 ${source.slice(apiStart,apiEnd)}
-${reset}
+${source.slice(resetStart,resetEnd)}
 }; return {api,normalize,stats:()=>({saves})};`);
 const model=initial=>factory([],initial||{});
 const areaStart=source.indexOf('  function wallpaperArea('),areaEnd=source.indexOf('  let imageBounds',areaStart);

@@ -26,7 +26,35 @@ body[data-ds-dark-theme]{color-scheme:dark;--dsw-alias-label-primary:#edf1f6;--d
 </style></head><body><main id="settings"></main></body></html>`;
 function fixture() {
   let activeTheme = 'light', panelCleanup;
-  const listeners = new Set(), effects = [];
+  const listeners = new Set(), effects = [], inspections = new Map();
+  const inspector = { register(definition) { inspections.set(definition.manifest.id, definition); return () => inspections.delete(definition.manifest.id); } };
+  window.materialSnapshot = () => inspections.get('SAOAppearance').query('snapshot');
+  let previewProbe = null;
+  const nativeRect = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function (...args) {
+    if (previewProbe) {
+      if (this.closest('.sao-preview')) previewProbe.rectReads++;
+      if (this.matches('[data-sao-liquid]') || this.querySelector(':scope > [data-sao-liquid]')) previewProbe.liquidGeometryReads++;
+    }
+    return nativeRect.apply(this, args);
+  };
+  const nativeSetProperty = CSSStyleDeclaration.prototype.setProperty;
+  CSSStyleDeclaration.prototype.setProperty = function (property, value, priority) {
+    const owner = previewProbe?.owners.get(this);
+    if (owner && /^(?:-webkit-)?mask/.test(property)) previewProbe.maskWrites.push({ element: owner.className, property, value });
+    return nativeSetProperty.call(this, property, value, priority);
+  };
+  const nativeDraw = WebGL2RenderingContext.prototype.drawArrays;
+  WebGL2RenderingContext.prototype.drawArrays = function (...args) {
+    if (previewProbe) previewProbe.liquidDraws++;
+    return nativeDraw.apply(this, args);
+  };
+  window.beginPreviewProbe = () => {
+    const owners = new WeakMap();
+    for (const element of document.querySelectorAll('.sao-preview,.sao-preview *')) owners.set(element.style, element);
+    previewProbe = { owners, rectReads: 0, maskWrites: [], liquidGeometryReads: 0, liquidDraws: 0 };
+  };
+  window.endPreviewProbe = () => { const { owners, ...work } = previewProbe; previewProbe = null; return work; };
   const effect = fn => { const cleanup = fn(); if (typeof cleanup === 'function') effects.push(cleanup); };
   const ctx = {
     theme: {
@@ -40,7 +68,7 @@ function fixture() {
     effect, get: () => ({}),
     on(event, fn) { if (event === 'theme/change') { listeners.add(fn); effects.push(() => listeners.delete(fn)); } },
     slots: { inject() {}, register() {} },
-    inject(dependencies, fn) { fn({ effect, get: () => ({ register: () => () => {} }) }); }
+    inject(dependencies, fn) { fn({ effect, get: name => name === 'cordisInspect' ? inspector : { register: () => () => {} } }); }
   };
   window.start = (theme = 'light') => {
     window.stop(); window.hostMode(false); ctx.theme.setTheme(theme);
@@ -63,7 +91,7 @@ function fixture() {
   window.paint = async () => { await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); };
   window.measure = () => {
     const root = document.querySelector('[data-sao-settings]');
-    const visible = e => e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().height > 0;
+    const visible = e => !e.closest('[hidden]') && getComputedStyle(e).visibility === 'visible' && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().height > 0;
     const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
     const rgba = color => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data]; };
     const style = (e, pseudo = null) => {
@@ -82,12 +110,23 @@ function fixture() {
         let background = base.slice(0, 3).map(v => v * .55 + extreme * .45);
         const host = document.querySelector('#settings-host');
         if (host) background = blend(rgba(getComputedStyle(host, '::before').backgroundColor), background);
-        for (const node of ancestors) background = blend(rgba(getComputedStyle(node).backgroundColor), background);
+        for (const node of ancestors) {
+          background = blend(rgba(getComputedStyle(node).backgroundColor), background);
+          // The selected shared thumb is a sibling paint layer, not an ancestor.
+          // Include it below the selected text rather than treating it as transparent.
+          if (node.matches('[data-sao-segment]')) {
+            const selected = node.querySelector('input[type="radio"]:checked')?.closest('label') || node.querySelector('[role="tab"][aria-selected="true"]');
+            const thumb = node.querySelector('[data-sao-segment-thumb]');
+            if (thumb && selected?.contains(e)) background = blend(rgba(getComputedStyle(thumb).backgroundColor), background);
+          }
+        }
         const light = luminance(background);
         return (Math.max(foreground, light) + .05) / (Math.min(foreground, light) + .05);
       }));
     };
     const bounds = root.getBoundingClientRect();
+    const textElements = [...root.querySelectorAll('.sao-hint,.sao-reset,.sao-current-color,.sao-preview-note,.sao-live,.sao-choice small,[data-sao-segment] .sao-choice strong,[data-sao-segment] [role="tab"],output')].filter(visible);
+    const textDetails = textElements.map(element => ({ text: element.textContent.trim(), className: element.className, pref: element.closest('label')?.querySelector('[data-pref]')?.dataset.pref, contrast: contrast(element), color: getComputedStyle(element).color }));
     return {
       width: innerWidth, docWidth: document.documentElement.scrollWidth, root: style(root),
       host: document.querySelector('#settings-host') ? style(document.querySelector('#settings-host'), '::before') : null,
@@ -96,12 +135,26 @@ function fixture() {
       overflowing: [...root.querySelectorAll('*')].filter(visible).filter(e => { const b = e.getBoundingClientRect(); return b.left < bounds.left - 1 || b.right > bounds.right + 1; }).map(e => e.className || e.tagName),
       tabs: [...root.querySelectorAll('.sao-tab')].map(e => ({ selected: e.getAttribute('aria-selected'), ...style(e) })),
       groups: [...root.querySelectorAll('fieldset,.sao-font,.sao-upload,.sao-preview')].filter(visible).map(style),
-      rows: [...root.querySelectorAll('.sao-row,.sao-range-row,.sao-mode-tabs')].filter(visible).map(style),
-      selectedChoices: [...root.querySelectorAll('.sao-choice > input:checked + span')].filter(visible).map(style),
-      choiceMarks: [...root.querySelectorAll('.sao-choice > input')].filter(visible).map(e => ({ width: e.getBoundingClientRect().width, shadow: getComputedStyle(e).boxShadow })),
+      rows: [...root.querySelectorAll('.sao-row,.sao-range-row,.sao-mode-tabs:not([data-sao-segment])')].filter(visible).map(style),
+      selectedChoices: [...root.querySelectorAll('.sao-choice > input:checked + span')].filter(visible).filter(e => !e.closest('[data-sao-segment]')).map(style),
+      segments: [...root.querySelectorAll('[data-sao-segment]')].filter(visible).map(group => {
+        const thumb = group.querySelector('[data-sao-segment-thumb]');
+        const labels = [...group.querySelectorAll('label.sao-choice,[role="tab"]')].filter(visible);
+        const boxes = labels.map(label => label.getBoundingClientRect());
+        return { ...style(group), thumbCount: group.querySelectorAll('[data-sao-segment-thumb]').length,
+          thumb: thumb ? { ...style(thumb), hidden: thumb.getAttribute('aria-hidden'), pointerEvents: getComputedStyle(thumb).pointerEvents } : null,
+          labels: labels.map(style), widths: boxes.map(box => box.width), tops: boxes.map(box => box.top) };
+      }),
+      textRadios: [...root.querySelectorAll('[data-sao-segment] input[type="radio"][data-pref]')].filter(e => visible(e.closest('label'))).map(e => ({
+        opacity: getComputedStyle(e).opacity, display: getComputedStyle(e).display, visibility: getComputedStyle(e).visibility,
+        ariaHidden: e.getAttribute('aria-hidden'), name: e.name, label: e.labels?.length,
+        after: getComputedStyle(e, '::after').content, before: getComputedStyle(e, '::before').content, shadow: getComputedStyle(e).boxShadow
+      })),
+      wallpaperRadios: [...root.querySelectorAll('[data-wall-grid] input[type="radio"]')].filter(e => visible(e.closest('label'))).map(e => ({ name: e.name, label: e.labels?.length, checked: e.checked, ariaHidden: e.getAttribute('aria-hidden') })),
       swatches: [...root.querySelectorAll('.sao-swatch input:checked + span')].filter(visible).map(e => ({ ...style(e), markWidth: parseFloat(getComputedStyle(e, '::after').width), outlineStyle: getComputedStyle(e).outlineStyle })),
       controls: [...root.querySelectorAll('.sao-btn,.sao-font-row input,.sao-hex-row input')].filter(visible).map(style),
-      textContrast: [...root.querySelectorAll('.sao-hint,.sao-reset,.sao-current-color,.sao-preview-note,.sao-live,.sao-choice small,output')].filter(visible).map(contrast),
+      textContrast: textDetails.map(item => item.contrast),
+      textContrastDetails: textDetails,
       images: root.querySelectorAll('[data-animation-preview]').length,
       preview: visible(root.querySelector('.sao-preview'))
     };
@@ -139,7 +192,7 @@ test('glass settings stay translucent and operable in both themes and narrow pan
     for (const width of [1100, 760, 430, 375]) {
       await page.setViewportSize({ width, height: 900 });
       for (const tab of ['startup', 'appearance', 'wallpaper']) {
-        await page.locator('[data-tab="' + tab + '"]').click(); await page.evaluate(() => paint());
+        await page.locator('[data-tab="' + tab + '"]').click(); await page.mouse.move(0, 0); await page.evaluate(() => paint());
         const result = await page.evaluate(() => measure());
         assert.ok(Math.min(...result.textContrast) >= 4.5, theme + ' extreme backdrop helper text meets AA: ' + Math.min(...result.textContrast));
         result.extremeBackdropContrast = result.textContrast;
@@ -151,9 +204,24 @@ test('glass settings stay translucent and operable in both themes and narrow pan
         assert.match(result.root.backdrop, /blur\(24px\)/, 'shell diffuses the backdrop');
         assert.ok(result.groups.every(s => s.alpha >= .10 && s.alpha <= .15 && s.radius === 22 && s.border === '1px' && s.borderChroma < 24), 'groups are light glass with neutral hairlines and 22px corners');
         assert.ok(result.rows.every(s => s.alpha === 0 && s.border === '0px' && s.shadow === 'none'), 'rows do not introduce additional cards');
-        assert.ok(result.tabs.every(s => s.border === '0px' && s.radius === 999), 'tabs use quiet pills without enclosing frames');
-        assert.ok(result.selectedChoices.every(s => s.alpha < .25 && s.border === '1px' && s.borderChroma < 24), 'selected choices have subtle fill and neutral borders');
-        assert.ok(result.choiceMarks.every(s => s.width <= 12 && s.shadow === 'none'), 'choice marks remain small without double rings');
+        assert.ok(result.tabs.every(s => s.border === '0px' && s.radius >= 12), 'tabs retain rounded borderless targets');
+        assert.ok(result.selectedChoices.every(s => s.alpha < .25 && s.border === '1px' && s.borderChroma < 24), 'image choices retain subtle selection and native radio semantics');
+        assert.ok(result.segments.length >= 1, 'visible settings contain shared segmented controls');
+        for (const segment of result.segments) {
+          assert.equal(segment.thumbCount, 1, 'each segment has exactly one shared thumb');
+          assert.equal(segment.thumb.hidden, 'true', 'decorative thumb is hidden from assistive technology');
+          assert.equal(segment.thumb.pointerEvents, 'none', 'thumb does not intercept native label clicks');
+          assert.ok(segment.alpha > 0 && segment.alpha < .30 && segment.radius >= 16, 'segment has one quiet translucent rounded frame');
+          assert.ok(segment.thumb.alpha > 0 && segment.thumb.alpha < .35 && segment.thumb.borderChroma < 24, 'shared thumb uses a subtle neutral-edged fill');
+          assert.ok(segment.labels.every(s => s.alpha === 0 && (s.border === '0px' || s.borderColor[3] === 0) && s.shadow === 'none'), 'labels do not paint separate selection cards');
+          assert.ok(Math.max(...segment.widths) - Math.min(...segment.widths) <= 1, 'segment targets have equal widths');
+          assert.ok(Math.max(...segment.tops) - Math.min(...segment.tops) <= 1, 'segment options stay on a single row');
+        }
+        assert.ok(result.textRadios.every(s => s.opacity === '0' && s.display !== 'none' && s.visibility !== 'hidden' && s.ariaHidden !== 'true' && s.name && s.label === 1 && ['none', 'normal'].includes(s.after) && ['none', 'normal'].includes(s.before) && s.shadow === 'none'), 'text radios are visually transparent without check marks and retain their names and labels');
+        if (tab === 'wallpaper') {
+          assert.ok(result.wallpaperRadios.length >= 4 && result.wallpaperRadios.every(s => s.name && s.label === 1 && s.ariaHidden !== 'true'), 'wallpaper image choices retain labeled native radios');
+          assert.equal(result.wallpaperRadios.filter(s => s.checked).length, 1, 'one wallpaper image choice is selected');
+        }
         assert.ok(result.swatches.every(s => s.outlineStyle === 'none' && s.shadow === 'none' && s.markWidth <= 14), 'swatches use a small check rather than colored rings: ' + JSON.stringify(result.swatches));
         assert.ok(result.controls.every(s => s.radius >= 16 && s.alpha < .25 && s.borderChroma < 24), 'controls have rounded translucent neutral surfaces');
         assert.ok(result.tabs.filter(s => s.selected === 'false').every(s => s.alpha === 0 && s.shadow === 'none'), 'inactive tabs stay transparent');
@@ -178,9 +246,9 @@ test('glass settings stay translucent and operable in both themes and narrow pan
     await page.locator('[data-pref="rightLinked"]').uncheck();
     assert.equal(await page.locator('[data-right-controls]').isVisible(), true, 'independent controls remain reachable');
     await page.locator('[data-tab="startup"]').click();
-    await page.locator('[data-pref="featureMode"][value="startup-only"]').check();
+    await page.locator('[data-pref="featureMode"][value="startup-only"]').locator('..').click();
     assert.equal(await page.locator('.sao-preview').isVisible(), false);
-    await page.locator('[data-pref="featureMode"][value="all"]').check();
+    await page.locator('[data-pref="featureMode"][value="all"]').locator('..').click();
     assert.equal(await page.locator('.sao-preview').isVisible(), true);
     await page.locator('[data-tab="startup"]').focus(); await page.keyboard.press('ArrowRight');
     assert.equal(await page.locator('[data-tab="appearance"]').getAttribute('aria-selected'), 'true', 'keyboard tab navigation retained');
@@ -197,7 +265,8 @@ test('glass settings stay translucent and operable in both themes and narrow pan
       for (const [name, accent] of [['blue', '#8CC8F4'], ['orange', '#D29A34'], ['green', '#3C8D83']]) {
         await page.evaluate(async accent => { api.set({ accent }); await paint(); }, accent);
         const result = await page.evaluate(() => measure());
-        assert.ok(Math.min(...result.textContrast) >= 4.5, theme + ' extreme backdrop helper text meets AA: ' + Math.min(...result.textContrast));
+        if (Math.min(...result.textContrast) < 4.5) fs.writeFileSync(path.join(screenshotDir, 'contrast-failure.json'), JSON.stringify({ theme, hosted, name, accent, ...result }, null, 2));
+        assert.ok(Math.min(...result.textContrast) >= 4.5, theme + '/' + name + '/' + hosted + ' extreme backdrop helper text meets AA: ' + Math.min(...result.textContrast));
         result.extremeBackdropContrast = result.textContrast;
         variants.push(result); tintResults.push({ theme, hosted, name, accent, ...result });
         assert.ok(Math.min(...result.textContrast) >= 4.5, theme + '/' + name + '/' + hosted + ' helper text meets AA: ' + Math.min(...result.textContrast));
@@ -226,7 +295,58 @@ test('glass settings stay translucent and operable in both themes and narrow pan
       assert.deepEqual(variants.map(r => r.root.color), [first.root.color, first.root.color, first.root.color], 'text color is unchanged by tint');
     }
   }
-  await page.evaluate(() => stop()); assert.deepEqual(errors, [], 'no browser exceptions');
+  // Exercise the real appearance/liquid capture-phase scroll listeners too,
+  // rather than relying only on the isolated settings API fixture.
+  const scrollResults = [];
+  for (const hosted of [false, true]) {
+    await page.setViewportSize({ width: 800, height: 900 });
+    await page.evaluate(async hosted => {
+      document.querySelector('#optical-scroll')?.remove();
+      start('light'); document.querySelector('#settings').style.cssText = ''; hostMode(hosted);
+      const container = document.querySelector(hosted ? '#settings-host' : '#settings');
+      container.style.height = '320px'; container.style.overflow = 'auto';
+      const optical = document.createElement('section'); optical.id = 'optical-scroll';
+      optical.style.cssText = 'position:fixed;left:10px;top:10px;width:180px;height:120px;overflow:auto;z-index:50';
+      optical.innerHTML = '<div style="height:700px"><div id="scroll-glass" role="tooltip" style="width:160px;height:80px;border-radius:18px">Unrelated glass surface</div></div>';
+      document.body.appendChild(optical); api.set({ windowOpacity: .7 });
+      await paint(); await paint(); await paint();
+    }, hosted);
+    await page.waitForFunction(() => !!document.querySelector('#scroll-glass > canvas[data-sao-liquid]'));
+    const result = await page.evaluate(async hosted => {
+      const container = document.querySelector(hosted ? '#settings-host' : '#settings'), events = [];
+      const capture = event => { if (event.target === container) events.push({ top: container.scrollTop, trusted: event.isTrusted, phase: event.eventPhase }); };
+      document.addEventListener('scroll', capture, { capture: true });
+      const max = container.scrollHeight - container.clientHeight;
+      const masks = () => [...document.querySelectorAll('.sao-scene-conversation,.sao-mini-surface')].map(element => element.style.getPropertyValue('mask-image'));
+      const before = masks(), appearanceBefore = materialSnapshot(); beginPreviewProbe();
+      try {
+        for (const fraction of [.2, .6, 1, .4, 0]) { container.scrollTo({ top: Math.round(max * fraction), behavior: 'instant' }); await paint(); await paint(); }
+        const work = endPreviewProbe(), appearanceAfter = materialSnapshot();
+        // Positive control: scrolling an ancestor that really contains a glass
+        // surface must still refresh its geometry and repaint the liquid lens.
+        beginPreviewProbe(); document.querySelector('#optical-scroll').scrollTo({ top: 40, behavior: 'instant' });
+        await paint(); await paint(); await paint();
+        const affectedSurfaceWork = endPreviewProbe();
+        return { hosted, max, events, before, after: masks(), work, materialPassDelta: appearanceAfter.passes - appearanceBefore.passes, materialErrors: [appearanceBefore.error, appearanceAfter.error], liquidSurfaceCount: document.querySelectorAll('[data-sao-liquid]').length, affectedSurfaceWork };
+      } finally { document.removeEventListener('scroll', capture, { capture: true }); }
+    }, hosted);
+    scrollResults.push(result);
+    fs.writeFileSync(path.join(screenshotDir, 'real-api-local-scroll-work.json'), JSON.stringify(scrollResults, null, 2));
+    assert.ok(result.max > 320, 'real API fixture has a scrollable local settings host');
+    assert.equal(result.events.length, 5, 'real API sees each native local scroll');
+    assert.ok(result.events.every(event => event.trusted && event.phase === 1), 'local scroll events reach real capture listeners natively');
+    assert.equal(result.work.rectReads, 0, 'real appearance/liquid local settings scroll does not read preview geometry');
+    assert.deepEqual(result.work.maskWrites, [], 'real appearance/liquid local settings scroll does not rewrite preview masks');
+    assert.equal(result.materialPassDelta, 0, 'unrelated local settings scroll does not schedule a global material pass');
+    assert.deepEqual(result.materialErrors, [null, null], 'the material runtime remains healthy during scrolling');
+    assert.ok(result.liquidSurfaceCount >= 1, 'a real unrelated GPU liquid surface remains registered during the probe');
+    assert.equal(result.work.liquidGeometryReads, 0, 'local settings scroll never remeasures unrelated GPU hosts or canvases');
+    assert.equal(result.work.liquidDraws, 0, 'local settings scroll never redraws unrelated GPU surfaces');
+    assert.ok(result.affectedSurfaceWork.liquidGeometryReads > 0, 'scrolling a true glass ancestor still measures its moved surface');
+    assert.ok(result.affectedSurfaceWork.liquidDraws > 0, 'scrolling a true glass ancestor still redraws its liquid surface');
+    assert.deepEqual(result.after, result.before, 'real API local scrolling preserves relative masks');
+  }
+  await page.evaluate(() => { stop(); document.querySelector('#optical-scroll')?.remove(); }); assert.deepEqual(errors, [], 'no browser exceptions');
   fs.writeFileSync(path.join(screenshotDir, 'results.json'), JSON.stringify(results, null, 2));
   fs.writeFileSync(path.join(screenshotDir, 'tint-results.json'), JSON.stringify(tintResults, null, 2));
   console.log('Verified 24 theme/tab/width combinations and 12 blue/orange/green tint variants across both themes and host modes, unchanged alpha/neutral hairlines, strict two-extreme-backdrop AA helper text, controls and preview; screenshots: ' + screenshotDir);
