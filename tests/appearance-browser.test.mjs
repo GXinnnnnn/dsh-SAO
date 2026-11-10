@@ -214,27 +214,30 @@ test('appearance isolation and async theme/reset races in native Edge', {
       assert.ok(result.hidden, 'pocket opt-out remains authoritative'); assert.deepEqual(result.restored, result.before, 'startup-only restores native wrap and clip behavior');
     }
   });
-  await t.test('SAO settings use one translucent host frame and release it on navigation', async t => {
+  await t.test('settings share the all-mode shell while startup-only keeps the local SAO fallback', async t => {
     const page = await pageFor(t, { featureMode: 'startup-only', surfaceColor: null });
     const result = await page.evaluate(async () => {
       const native = document.createElement('style'); native.textContent = '.host-fixture{position:relative;isolation:isolate;width:640px;background:rgb(250,250,250);border-radius:8px}.opaque-host{background:white}.host-fixture::before{background:rgb(250,250,250)}'; document.body.append(native);
       const host = document.createElement('article'); host.className='host-fixture'; host.setAttribute('role','dialog'); host.setAttribute('data-shortcut-modal','settings'); host.innerHTML='<section class="opaque-host"><div data-slot="settings.section"><div></div></div></section>';
-      const other = document.createElement('article'); other.className='host-fixture'; other.setAttribute('role','dialog'); other.setAttribute('data-shortcut-modal','settings'); document.body.append(host,other);
+      const other = document.createElement('article'); other.className='host-fixture'; other.setAttribute('role','dialog'); other.setAttribute('data-shortcut-modal','settings');
+      const generic = document.createElement('article'); generic.className='host-fixture'; generic.setAttribute('role','dialog'); document.body.append(host,other,generic);
       const read = el => { const s=getComputedStyle(el), p=getComputedStyle(el,'::before'); return {background:s.backgroundColor,radius:s.borderRadius,filter:p.backdropFilter,fill:p.backgroundColor,shadow:s.boxShadow}; };
       const before=read(other); host.querySelector('[data-slot] > div').append(document.querySelector('#settings')); await paint();
       const startup=read(host), untouched=read(other);
-      api.set({featureMode:'all'}); await paint(); const active=read(host), root=getComputedStyle(document.querySelector('[data-sao-settings]'));
+      api.set({featureMode:'all'}); await paint(); const active=read(host), allCategories=read(other), outsideSettings=read(generic), root=getComputedStyle(document.querySelector('[data-sao-settings]'));
       const content={background:root.backgroundColor,filter:root.backdropFilter,shadow:root.boxShadow}; const liquid=host.querySelectorAll(':scope > [data-sao-liquid]').length;
       api.set({windowOpacity:0}); await paint(); const zero=read(host);
       api.set({featureMode:'startup-only'}); await paint(); document.body.append(document.querySelector('#settings')); await paint(); const released=read(host);
-      host.remove();other.remove();native.remove(); return {before,startup,untouched,active,content,liquid,zero,released};
+      host.remove();other.remove();generic.remove();native.remove(); return {before,startup,untouched,active,allCategories,outsideSettings,content,liquid,zero,released};
     });
     assert.equal(result.startup.radius,'32px'); assert.equal(result.active.radius,'32px');
     assert.match(result.startup.filter,/blur\(24px\)/); assert.match(result.active.filter,/blur\(24px\)/);
     assert.equal(result.active.background,'rgba(0, 0, 0, 0)'); assert.equal(result.content.background,'rgba(0, 0, 0, 0)');
     assert.equal(result.content.filter,'none');assert.equal(result.content.shadow,'none'); assert.equal(result.liquid,0,'host uses a single CSS backdrop, without a second GPU fill');
     assert.equal(result.zero.filter,'none','window transparency endpoint removes host blur');
-    assert.deepEqual(result.untouched,result.before,'other settings retain their native surface'); assert.deepEqual(result.released,result.before,'leaving SAO removes its glass frame');
+    assert.deepEqual(result.allCategories,result.active,'every native category shares the shell without mounting SAO');
+    assert.notEqual(result.outsideSettings.radius,'32px','generic dialogs do not receive the settings shell');
+    assert.deepEqual(result.untouched,result.before,'startup-only preserves other settings'); assert.deepEqual(result.released,result.before,'leaving SAO in startup-only restores its native frame');
   });
   await t.test('all/startup/all invalidates a queued theme request permanently', async t => {
     const page = await pageFor(t, { featureMode: 'all' });

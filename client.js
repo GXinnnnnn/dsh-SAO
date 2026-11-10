@@ -21,6 +21,29 @@ function saoPreviewHoleMask(box, holes) {
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + box.width + '" height="' + box.height + '" viewBox="0 0 ' + box.width + ' ' + box.height + '"><rect width="100%" height="100%" fill="white"/>' + rects + '</svg>';
   return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
 }
+// One native settings shell shared by every category; the local mount also
+// supplies it in startup-only/standalone mode without enabling global appearance.
+function saoSettingsHostCSS(host) {
+  return `
+${host}{--sao-settings-host-base:color-mix(in srgb,var(--dsw-alias-bg-base,Canvas) 86%,var(--dsw-alias-brand-primary,Highlight) 14%);--sao-settings-ink:var(--dsw-alias-label-primary,CanvasText);--sao-settings-line:color-mix(in srgb,var(--sao-settings-ink) 12%,transparent);--sao-settings-card:color-mix(in srgb,var(--sao-settings-host-base) 12%,transparent);--sao-settings-hover:color-mix(in srgb,var(--sao-settings-host-base) 22%,transparent);--sao-settings-selected:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 10%,color-mix(in srgb,var(--sao-settings-ink) 5%,transparent));--dsw-alias-settings-card-fill:var(--sao-settings-card);--dsw-alias-bg-layer-1:var(--sao-settings-card);--dsw-alias-bg-layer-2:var(--sao-settings-card);--dsw-alias-bg-layer-3:var(--sao-settings-card);--dsw-alias-bg-module-platform:var(--sao-settings-card);--dsw-alias-label-secondary:color-mix(in srgb,var(--sao-settings-ink) 88%,var(--dsw-alias-bg-base,Canvas));--dsw-alias-label-tertiary:var(--dsw-alias-label-secondary);--dsw-alias-border-l1:var(--sao-settings-line);--dsw-alias-border-l2:var(--sao-settings-line);color:var(--sao-settings-ink);isolation:isolate;border:0!important;border-radius:32px!important;corner-shape:round!important;background:transparent!important;box-shadow:0 24px 72px rgb(8 15 28 / .22),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 9%,transparent)!important}
+${host}::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;corner-shape:round;background:linear-gradient(135deg,rgb(255 255 255 / .12),transparent 30%,transparent 75%,rgb(255 255 255 / .04)),color-mix(in srgb,var(--sao-settings-host-base) calc(60% * var(--sao-settings-window-alpha,.8)),transparent)!important;backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;-webkit-backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;box-shadow:inset 0 1px 0 rgb(255 255 255 / .48),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 8%,transparent)!important}
+${host}>:is(div,main,section):has([data-slot="settings.section"],[data-sao-settings]),
+${host} [data-slot="settings.section"],
+${host} [data-slot="settings.section"]>:is(div,main,section,article){background:transparent!important;box-shadow:none!important}
+${host}>nav{background:transparent!important;border-color:var(--sao-settings-line)}
+${host}>nav button{border-radius:14px;corner-shape:round!important;color:var(--sao-settings-ink)}
+${host}>nav button:hover{background:var(--sao-settings-hover)}
+${host}>nav button[aria-current="true"]{background:var(--sao-settings-selected)!important;box-shadow:inset 0 0 0 1px var(--sao-settings-line);font-weight:600}
+${host}>nav button:focus-visible{outline:2px solid color-mix(in srgb,var(--sao-settings-ink) 65%,var(--dsw-alias-bg-base,Canvas));outline-offset:-3px}
+/* These verified native/plugin card roots use an opaque base instead of the
+   settings layer tokens. Preserve their content, semantic borders and controls. */
+${host} [data-slot="settings.section"] :is(.Wsg8iW_card,._2vuxea_group,.vr-ia-plugin-card,.VqXecW_installedSkeletonCard){background:var(--sao-settings-card)!important;border-radius:22px;corner-shape:round!important}
+${host} [data-slot="settings.section"] .Wsg8iW_card.Wsg8iW_cardActive{background:var(--sao-settings-selected)!important}
+/* The sticky market search must still mask scrolling content beneath it. */
+${host} [data-slot="settings.section"] .nUhMVa_stickyHead,
+${host} [data-slot="settings.section"] .nUhMVa_stickyHead::before{background:var(--sao-settings-host-base)!important}
+`;
+}
 function mountSAOSettings(container, api) {
   'use strict';
   const doc = container.ownerDocument;
@@ -74,7 +97,7 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-switch input{position:absolute;opacity:0;width:44px;height:28px;margin:0;cursor:pointer}
 [data-sao-settings] .sao-switch-track{width:44px;height:26px;border-radius:999px;corner-shape:round!important;background:color-mix(in srgb,var(--sao-ink) 30%,var(--sao-base));pointer-events:none;position:relative;border:1px solid transparent;transition:background .15s,border-color .15s}
 [data-sao-settings] .sao-switch-track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;corner-shape:round!important;background:var(--sao-base);transition:transform .15s,background .15s}
-[data-sao-settings] .sao-switch input:checked + span{background:var(--sao-mark);border-color:var(--sao-mark)}
+[data-sao-settings] .sao-switch input:checked + span{background:color-mix(in srgb,var(--sao-accent) 92%,black);border-color:var(--sao-mark)}
 [data-sao-settings] .sao-switch input:checked + span::after{transform:translateX(18px);background:var(--sao-base)}
 [data-sao-settings] .sao-switch input:focus-visible + span{outline:2px solid var(--sao-focus);outline-offset:4px}
 [data-sao-settings] fieldset{border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:color-mix(in srgb,var(--sao-glass-base) 12%,transparent);box-shadow:inset 0 1px 0 var(--sao-glint);padding:16px;margin:20px 0;min-width:0}
@@ -194,13 +217,9 @@ function mountSAOSettings(container, api) {
 [data-sao-settings]{container-type:inline-size;container-name:sao-settings}
 @media(max-width:720px){[data-sao-settings]{padding:18px 16px}[data-sao-settings] .sao-layout{grid-template-columns:minmax(0,1fr);gap:24px}[data-sao-settings] .sao-scene{height:180px}[data-sao-settings] .sao-tab{flex:1;padding-inline:10px}[data-sao-settings] .sao-head{margin-bottom:16px}}
 @media(prefers-reduced-motion:reduce){[data-sao-settings] *,[data-sao-settings] *::before,[data-sao-settings] *::after{transition:none!important;animation:none!important}}
-/* One shared glass frame for the active SAO settings page. This style is
-   mounted with that page, so other settings and account menus retain ownership. */
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings]){--sao-settings-host-base:color-mix(in srgb,var(--dsw-alias-bg-base,Canvas) 86%,var(--dsw-alias-brand-primary,Highlight) 14%);--dsw-alias-settings-card-fill:transparent;isolation:isolate;border:0!important;border-radius:32px!important;corner-shape:round!important;background:transparent!important;box-shadow:0 24px 72px rgb(8 15 28 / .22),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 9%,transparent)!important}
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;corner-shape:round;background:linear-gradient(135deg,rgb(255 255 255 / .12),transparent 30%,transparent 75%,rgb(255 255 255 / .04)),color-mix(in srgb,var(--sao-settings-host-base) calc(60% * var(--sao-settings-window-alpha,.8)),transparent)!important;backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;-webkit-backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;box-shadow:inset 0 1px 0 rgb(255 255 255 / .48),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 8%,transparent)!important}
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])>:is(div,main,section):has([data-sao-settings]),
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-slot="settings.section"]:has([data-sao-settings]),
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-slot="settings.section"]>:has([data-sao-settings]){background:transparent!important;box-shadow:none!important}
+/* Standalone/startup-only fallback; full appearance installs the same shell
+   before any settings category has been opened. */
+${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])')}
 :is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-sao-settings]{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:8px 0 24px!important;margin:0!important}
 :is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-sao-settings] :is(fieldset,.sao-preview){backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 
@@ -2122,9 +2141,12 @@ function applySAOControlStates(ctx) {
   // generic selected bottom edge under a circular one-pixel outline.
   const control = `${scope} ${candidates}${safe}:not([data-conversation-tabs]>[role="tab"])`;
   // An explicit false ARIA state must win over an obsolete native active class.
-  const selected = ':is([aria-checked="true"],[aria-checked="mixed"],[aria-selected="true"],[aria-pressed="true"],[aria-pressed="mixed"],[aria-current="page"],[aria-current="true"],[data-state="checked"],[data-state="indeterminate"],[data-state="selected"],[data-state="pressed"],[data-state="active"],[data-state="on"],[data-on]:not([data-on="false"]):not([data-state="off"]):not([data-off]:not([data-off="false"])),._pill_rs966_1._active_rs966_26:not([aria-pressed="false"]):not([aria-selected="false"]))';
+  const selected = ':is([aria-checked="true"],[aria-checked="mixed"],[aria-selected="true"],[aria-pressed="true"],[aria-pressed="mixed"],[aria-current="page"],[aria-current="true"],[data-state="checked"],[data-state="indeterminate"],[data-state="selected"],[data-state="pressed"],[data-state="active"],[data-state="on"],[data-on]:not([data-on="false"]):not([data-state="off"]):not([data-off]:not([data-off="false"])),._pill_rs966_1._active_rs966_26:not([aria-checked="false"]):not([aria-pressed="false"]):not([aria-selected="false"]))';
   const off = ':is([aria-checked="false"],[data-state="unchecked"],[data-state="off"],[data-off]:not([data-off="false"]),[data-on="false"])';
   const nativeTrack = `${scope} ${nativeSwitch}${safe}`;
+  // Match generic selection specificity before narrowing to the native compact
+  // switch, otherwise its selected bottom-edge recipe wins over track styling.
+  const nativeOn = `${control}${selected}:is(${nativeSwitch})[aria-checked="true"]`;
   const input = `${scope} input:is([type="checkbox"],[type="radio"])${safe}`;
   // Official ConversationRoot owns this row, populated from conversation.view:
   // chat (ui-chat), trajectory (ui-trajectory), context/fleet (dsh-context),
@@ -2153,6 +2175,8 @@ ${scope}{
   --sao-control-selected-hover:color-mix(in srgb,var(--sao-control-tint) 32%,var(--sao-control-hover));
   --sao-control-selected-down:color-mix(in srgb,var(--sao-control-tint) 42%,var(--sao-control-down));
   --sao-control-stroke:color-mix(in srgb,var(--sao-control-ink) 20%,transparent);
+  --sao-switch-stroke:color-mix(in srgb,var(--sao-control-ink) 12%,var(--sao-control-accent) 8%);
+  --sao-switch-thumb:color-mix(in srgb,var(--sao-control-ink) 65%,var(--dsw-alias-bg-base,Canvas));
   --sao-control-sheen:color-mix(in srgb,white 35%,transparent);
   --sao-control-focus:var(--dsw-focus-ring-color,var(--sao-control-edge));
 }
@@ -2174,17 +2198,24 @@ ${control}${selected}{
 }
 ${control}:active{background-color:var(--sao-control-down)!important}
 ${control}${selected}:active{background-color:var(--sao-control-selected-down)!important}
-/* Keep the native compact switch's strong track/knob contrast and translation.
+/* Keep native compact switch dimensions, off paint and thumb translation.
+   Selected tracks get one concentric stroke, with no lower strip or sheen.
    A role=switch wrapping a label is intentionally not treated as a tiny track. */
+/* Resolve the current page accent here: root aliases predate the SAO palette. */
+${nativeTrack}{
+  --sao-switch-selected:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 92%,black);
+  --sao-switch-selected-hover:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 94%,black);
+  --sao-switch-selected-down:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 90%,black);
+}
 ${nativeTrack}${off}{background-color:color-mix(in srgb,var(--sao-control-ink) 25%,var(--dsw-alias-bg-base,Canvas))!important}
-${nativeTrack}[aria-checked="true"]{background-color:color-mix(in srgb,var(--sao-control-accent) 80%,var(--sao-control-ink))!important;box-shadow:inset 0 0 0 1px var(--sao-control-edge),inset 0 1px 0 var(--sao-control-sheen)!important}
-${nativeTrack}[aria-checked="true"]>._thumb_1ik0f_33{background-color:var(--dsw-alias-label-on-brand,var(--dsw-alias-label-primary-foreground,Canvas))!important}
+${nativeOn}{background-color:var(--sao-switch-selected)!important;box-shadow:inset 0 0 0 1px var(--sao-switch-stroke)!important}
+${nativeOn}>._thumb_1ik0f_33{background-color:var(--sao-switch-thumb)!important}
 @media(hover:hover){
   ${nativeTrack}${off}:hover{background-color:color-mix(in srgb,var(--sao-control-ink) 32%,var(--dsw-alias-bg-base,Canvas))!important}
-  ${nativeTrack}[aria-checked="true"]:hover{background-color:color-mix(in srgb,var(--sao-control-accent) 68%,var(--sao-control-ink))!important}
+  ${nativeOn}:hover{background-color:var(--sao-switch-selected-hover)!important}
 }
 ${nativeTrack}${off}:active{background-color:color-mix(in srgb,var(--sao-control-ink) 39%,var(--dsw-alias-bg-base,Canvas))!important}
-${nativeTrack}[aria-checked="true"]:active{background-color:color-mix(in srgb,var(--sao-control-accent) 56%,var(--sao-control-ink))!important}
+${nativeOn}:active{background-color:var(--sao-switch-selected-down)!important}
 ${input}{accent-color:var(--sao-control-edge)}
 /* Never suppress the host keyboard ring; menu items that only had a focus fill
    receive the same visible ring as switches and inputs. */
@@ -2223,9 +2254,9 @@ ${material}{box-shadow:inset 0 1px 0 color-mix(in srgb,white calc(32% * var(--sa
 @media(forced-colors:active){
   ${control},${conversationControl}{background:Canvas!important;color:CanvasText!important;box-shadow:none!important;outline:1px solid ButtonText!important;outline-offset:-1px!important}
   ${control}${selected},${conversationControl}${selected}{background:Highlight!important;color:HighlightText!important;outline:2px solid Highlight!important}
-  ${nativeTrack}[aria-checked="true"]{background-color:Highlight!important}
+  ${nativeOn},${nativeOn}:hover,${nativeOn}:active{background:Highlight!important;color:HighlightText!important;box-shadow:none!important;outline:2px solid Highlight!important}
   ${nativeTrack}${off}{background-color:Canvas!important}
-  ${nativeTrack}[aria-checked="true"]>._thumb_1ik0f_33{background-color:HighlightText!important}
+  ${nativeOn}>._thumb_1ik0f_33{background-color:HighlightText!important}
   ${control}:focus-visible,${conversationControl}:focus-visible,${input}:focus-visible{outline:2px solid Highlight!important;outline-offset:2px!important}
   ${material}{box-shadow:none!important}
   ${conversationTabs}${safe}{background-color:Canvas!important;box-shadow:none!important}
@@ -2292,7 +2323,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   window[instanceKey]?.dispose?.();
   // Retire DOM left by versions that did not expose a disposable controller.
   for (const el of document.querySelectorAll('style[data-sao-appearance],style[data-sao-palette],[data-sao-wallpaper],[data-sao-liquid]')) el.remove();
-  const materialAttributes = ['data-sao-material','data-sao-positioned','data-sao-surface','data-sao-zone','data-sao-core-surface'];
+  const materialAttributes = ['data-sao-material','data-sao-positioned','data-sao-surface','data-sao-zone','data-sao-core-surface','data-sao-backdrop'];
   for (const el of document.querySelectorAll('[data-sao-context]')) el.removeAttribute('data-sao-context');
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
@@ -2658,7 +2689,28 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const mainBody = boxFor(outlet?.parentElement || outlet);
     const right = boxFor(document.querySelector('[data-slot="rightbar"]')?.parentElement);
     const {column,frame} = sceneLayoutRoots(ancestors(mainBody),ancestors(right));
-    if (!outlet || !column || !frame) { background.remove(); return; }
+    let visible = outlet && column && frame && !outlet.closest('[hidden],[aria-hidden="true"],[inert]') && column.getBoundingClientRect().width > 0 && column.getBoundingClientRect().height > 0 && getComputedStyle(column).visibility === 'visible' && getComputedStyle(outlet).visibility === 'visible';
+    // display:contents is a valid outlet; a display:none wrapper is not. Its
+    // fixed-size outer column can remain measurable while the scene is hidden.
+    for (let node = outlet; visible && node && node !== column; node = node.parentElement) if (getComputedStyle(node).display === 'none') visible = false;
+    if (!visible) {
+      // Native pages can unmount (or retain a hidden) conversation. Forget its
+      // geometry and ownership so a later portal cannot revive that old scene.
+      background.remove();
+      frameHost?.removeAttribute('data-sao-wall-frame'); frameHost?.removeAttribute('data-sao-wall-positioned');
+      for (const el of layoutTouched) for (const attr of ['data-sao-wall-column','data-sao-wall-right','data-sao-browser-only','data-sao-main-joined','data-sao-right-joined']) el.removeAttribute(attr);
+      for (const el of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) el.removeAttribute(attr);
+      layoutTouched.clear(); shellTouched.clear();
+      if (frameHost) resizeObserver?.disconnect();
+      adaptiveObserved.clear(); contextCardsObserved.clear(); contextViewportsObserved.clear(); rightPanesObserved.clear();
+      for (const node of contextTouched) node.removeAttribute('data-sao-context'); contextTouched.clear();
+      for (const [nodes,attribute] of [[rightPanesTouched,'data-sao-right-pane'],[rightRootsTouched,'data-sao-right-root'],[browserPanesTouched,'data-sao-browser-pane']]) { for (const node of nodes) node.removeAttribute(attribute); nodes.clear(); }
+      contextCardPaths = []; browserCardPaths = []; rightSurfacePaths = []; conversationSurfacePaths = []; onlyBrowserRight = false;
+      frameHost = wallHost = observedRight = null; rightBounds = null; rightJoined = false;
+      conversationBounds = bounds = imageBounds = {x:0,y:0,width:0,height:0};
+      conversationBackdrop.hidden = rightBackdrop.hidden = rightBase.hidden = true;
+      return;
+    }
     const frameChanged = frame !== frameHost;
     if (frameChanged) {
       frameHost?.removeAttribute('data-sao-wall-frame');
@@ -2740,8 +2792,24 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     '[role="dialog"][data-shortcut-modal="settings"]'
   ];
   const excluded = '[data-plugin],[data-pet],[data-whale],[data-slot="sidebar"],[data-slot="shell.sidebar"],iframe,canvas,video';
-  const saoSettingsDialogSelector = ':is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])';
+  const settingsDialogSelector = ':is(dialog,[role="dialog"])[data-shortcut-modal="settings"]';
   const windowSelector = '[data-menu-material],[role="dialog"],[role="alertdialog"],[role="tooltip"],[role="alert"][style*="--dsh-toast-hold"],[data-popover-content]';
+  function windowUsesWallpaper(el) {
+    if (!background.isConnected || !imageBounds.width || !imageBounds.height) return false;
+    const r = el.getBoundingClientRect(), area = imageBounds;
+    if (r.left < area.x || r.top < area.y || r.right > area.x + area.width || r.bottom > area.y + area.height) return false;
+    // Portals do not inherit scene ownership. Probe the visible backing branch,
+    // excluding the portal itself and its layout ancestors. No DOM pixels/text
+    // are captured; CSS owns any unknown or occluded backdrop (including modals).
+    const inset = Math.min(8, r.width / 4, r.height / 4);
+    const points = [[r.left + r.width / 2,r.top + r.height / 2],
+      [r.left + inset,r.top + inset],[r.right - inset,r.top + inset],
+      [r.left + inset,r.bottom - inset],[r.right - inset,r.bottom - inset]];
+    return points.every(([x,y]) => {
+      const backing = document.elementsFromPoint(x,y).find(node => node !== el && !el.contains(node) && !node.contains(el));
+      return !!backing?.closest('[data-sao-wall-column]') && !backing.closest(windowSelector + ',[data-sao-browser-pane]');
+    });
+  }
   function chooseSurfaces() {
     const windows = [...document.querySelectorAll(windowSelector)];
     const nodes = [...windows,...document.querySelectorAll(surfaceSelectors.join(','))];
@@ -2880,6 +2948,9 @@ ${background.parentElement ? `[data-sao-wall-frame]{isolation:isolate}[data-sao-
 [data-sao-zone="header"]{--sao-surface-alpha:${headerLayers.cardOpacity*100}%;--sao-surface-filter:${filter(p.headerOpacity,blur)};--sao-frost-filter:${filter(p.headerOpacity,blur,true)};--sao-optical-strength:${4*p.headerOpacity*(1-p.headerOpacity)}}
 [data-sao-zone="header-right"]{--sao-surface-alpha:${rightHeaderLayers.cardOpacity*100}%;--sao-surface-filter:${filter(rightHeaderAlpha,rightBlur)};--sao-frost-filter:${filter(rightHeaderAlpha,rightBlur,true)};--sao-optical-strength:${4*rightHeaderAlpha*(1-rightHeaderAlpha)}}
 [data-sao-zone="window"]{--sao-surface-alpha:${windowAlpha*100}%;--sao-surface-filter:none;--sao-frost-filter:${filter(windowAlpha,0,true)};--sao-optical-strength:${4*windowAlpha*(1-windowAlpha)};color:var(--dsw-alias-label-primary)!important}
+/* Outside a proven wallpaper scene the browser composites the actual page.
+   Keep the same fill and edge, without importing a remembered chat texture. */
+[data-sao-zone="window"][data-sao-backdrop="page"]{--sao-surface-filter:${filter(windowAlpha,12)}}
 body:has([data-menu-material][data-sao-material]) [data-menu-backing],
 [data-menu-material][data-sao-material]>div[aria-hidden="true"]{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 [role="tooltip"]{--dsw-alias-tooltip-key-bg:transparent!important;--dsw-alias-tooltip-key-label:var(--dsw-alias-label-primary)!important}
@@ -2906,7 +2977,7 @@ section[data-testid="todo-panel"][data-sao-component]::before{content:"";positio
 html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockkit-column="0"] > [data-sao-surface="joined"]{border-top-left-radius:var(--dsh-windows-content-radius,16px)!important}
 [data-sao-material]::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;corner-shape:inherit;z-index:-1;background:color-mix(in srgb,var(--sao-material-base,#f4f6f9) var(--sao-surface-alpha),transparent);backdrop-filter:var(--sao-surface-filter,none);-webkit-backdrop-filter:var(--sao-surface-filter,none);border:0;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) calc(9% * var(--sao-optical-strength)),transparent)}
 [data-sao-surface="joined"]::before{box-shadow:none}
-[role="dialog"][data-shortcut-modal="settings"]{--dsw-alias-settings-card-fill:transparent;border-radius:28px!important;border-color:color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 9%,transparent)!important}
+${saoSettingsHostCSS(settingsDialogSelector)}
 [role="dialog"][data-shortcut-modal="settings"] :is(button[aria-label="关闭"],button[aria-label="Close"]){border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 2%,transparent);color:var(--dsw-alias-label-primary);border-color:transparent}
 [data-composer-card][data-sao-material] :is([data-input-scroll],[data-input-scroll] > div,[data-composer-input]){border-color:transparent!important;box-shadow:none!important}
 [data-rightbar-col]:has([data-sao-material]) [data-sidebar-right-panel]{border-color:transparent!important;box-shadow:none!important;background:transparent!important}
@@ -2938,7 +3009,9 @@ ${saoBetterSidebarCSS(materialBase)}
     const isComposer = el => el.matches('[data-composer-card]') || !!el.querySelector(':scope > [data-slot="conversation.input.attachments"],:scope > [data-slot="conversation.input.overlay"]');
     const isRight = el => !isWindow(el) && !!el.closest('[data-rightbar-col],[data-slot="rightbar"],[data-slot="rightbar.session"]');
     const surfaceMode = el => isContextCard(el) ? contextGlass : isRight(el) ? rightGlass : p.glass;
-    const surfaces = glass ? chooseSurfaces().filter(el => surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el) || isComposer(el) || isContextCard(el))) : [];
+    // Native settings own one CSS glass shell across every registered category.
+    const surfaces = glass ? chooseSurfaces().filter(el => !el.matches(settingsDialogSelector) && surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el) || isComposer(el) || isContextCard(el))) : [];
+    const pageBackedWindows = new Set(surfaces.filter(el => isWindow(el) && !el.matches(settingsDialogSelector) && !windowUsesWallpaper(el)));
     // Include orphaned markers from earlier clients, not only nodes owned by this instance.
     let contextShapeChanged = false;
     for (const el of new Set([...touched,...document.querySelectorAll('[data-sao-material]')])) if (!surfaces.includes(el)) { if (isContextCard(el)) contextShapeChanged = true; for (const attr of materialAttributes) el.removeAttribute(attr); el.style.removeProperty('--sao-surface-alpha'); touched.delete(el); }
@@ -2946,6 +3019,8 @@ ${saoBetterSidebarCSS(materialBase)}
       if (!el.hasAttribute('data-sao-material') && getComputedStyle(el).position === 'static') el.setAttribute('data-sao-positioned','');
       if (el.getAttribute('data-sao-material') !== surfaceMode(el)) el.setAttribute('data-sao-material', surfaceMode(el));
       const zone = isContextCard(el) ? 'context' : isWindow(el) ? 'window' : isRightHeader(el) ? 'header-right' : isHeader(el) ? 'header' : isComposer(el) ? 'composer' : isRight(el) ? 'right' : 'conversation'; if (el.getAttribute('data-sao-zone') !== zone) el.setAttribute('data-sao-zone', zone);
+      if (pageBackedWindows.has(el)) { if (el.getAttribute('data-sao-backdrop') !== 'page') el.setAttribute('data-sao-backdrop','page'); }
+      else if (el.hasAttribute('data-sao-backdrop')) el.removeAttribute('data-sao-backdrop');
       if (zone !== 'conversation' && el.style.getPropertyValue('--sao-surface-alpha')) el.style.removeProperty('--sao-surface-alpha');
       const type = (isHeader(el) || isRightHeader(el) || el.matches(rightBodySelector) || el.matches('[data-dockkit-content],[data-dockkit-empty],[data-sidebar-right-panel]')) ? 'joined' : 'floating'; if (el.getAttribute('data-sao-surface') !== type) { if (isContextCard(el)) contextShapeChanged = true; el.setAttribute('data-sao-surface', type); }
       touched.add(el);
@@ -3003,7 +3078,7 @@ ${saoBetterSidebarCSS(materialBase)}
     paintBackdrop(rightBackdrop,rightBounds,rightOpacity,rightBlur,'16px','round',rightGlass);
     const isConversationSurface = el => !isRight(el) && !isWindow(el);
     // Nonzero background blur uses the CSS backdrop path rather than a costly or mismatched GPU approximation.
-    const liquidSurfaces = surfaces.filter(el => !el.matches(saoSettingsDialogSelector) && surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
+    const liquidSurfaces = surfaces.filter(el => !el.matches(settingsDialogSelector) && !pageBackedWindows.has(el) && surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
     if (rightGlass === 'liquid' && rightBounds && !rightBackdrop.hidden) liquidSurfaces.unshift(rightBackdrop);
     // Card bevels refract the continuous scene rather than sampling untouched
     // wallpaper through it. This prevents a clear ring around a tinted card.
@@ -3023,11 +3098,12 @@ ${saoBetterSidebarCSS(materialBase)}
   const structure = '[data-sao-settings],[data-slot],[data-dockkit-content],[data-dockkit-empty],[data-dockkit-strip],[data-sidebar-right-panel],[data-sao-material],' + windowSelector + ',' + componentSelector + ',' + contextRootSelector + ',' + contextCardSelector + ',' + rightPaneSelector + ',' + browserRootSelector;
   const observer = new MutationObserver(records => {
     if (records.some(r => {
+      if (r.type === 'attributes' && ['hidden','aria-hidden','inert','style','class'].includes(r.attributeName) && (r.target.matches?.('[data-slot="main.conversation"]') || r.target.querySelector?.('[data-slot="main.conversation"]'))) return true;
       if (r.type === 'attributes') return (!!r.target.closest?.('[data-dsh-native-tab-host],[data-dsh-bottom-panel]') || r.target.matches?.(windowSelector + ',' + contextRootSelector + ',[data-dockkit-content],[data-dockkit-host],[data-sidebar-right-session],[data-sidebar-right-panel],' + rightPaneSelector + ',' + browserRootSelector)) && (!['style','class'].includes(r.attributeName) || !touched.has(r.target));
       return r.type === 'childList' && [...r.addedNodes,...r.removedNodes].some(n => n.nodeType === 1 && !n.matches?.('[data-sao-liquid],[data-sao-wallpaper]') && (r.target.closest?.(rightPaneSelector) || n.matches?.(structure) || n.firstElementChild && n.querySelector?.(structure)));
     })) schedule();
   });
-  observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
+  observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','inert','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
   const materialKeys = Object.keys(defaults).filter(key => !['startup','animation','voice','sound','volume','accent','accentProfiles','theme'].includes(key));
   const samePreference = (a, b, key) => key.endsWith('SceneProfiles') || key === 'accentProfiles' ? JSON.stringify(a[key]) === JSON.stringify(b[key]) : Object.is(a[key], b[key]);
   const onStorage = event => {
@@ -3221,7 +3297,7 @@ ${saoBetterSidebarCSS(materialBase)}
     for (const el of contextTouched) el.removeAttribute('data-sao-context'); contextTouched.clear();
     videoWallpaper.dispose(); liquid.dispose(); paletteStyle.remove(); style.remove(); background.remove(); image.onload = image.onerror = null;
     if (customURL) URL.revokeObjectURL(customURL); if (customPosterURL) URL.revokeObjectURL(customPosterURL); for (const cleanup of panelDisposers) cleanup(); panelDisposers.clear(); subscribers.clear();
-    for (const el of touched) { el.style.removeProperty('--sao-surface-alpha'); el.removeAttribute('data-sao-material'); el.removeAttribute('data-sao-positioned'); el.removeAttribute('data-sao-surface'); el.removeAttribute('data-sao-zone'); } touched.clear();
+    for (const el of touched) { el.style.removeProperty('--sao-surface-alpha'); for (const attr of materialAttributes) el.removeAttribute(attr); } touched.clear();
     window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();
     if (window[instanceKey] === controller) delete window[instanceKey];
   }

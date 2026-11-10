@@ -17,6 +17,29 @@ function saoPreviewHoleMask(box, holes) {
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + box.width + '" height="' + box.height + '" viewBox="0 0 ' + box.width + ' ' + box.height + '"><rect width="100%" height="100%" fill="white"/>' + rects + '</svg>';
   return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
 }
+// One native settings shell shared by every category; the local mount also
+// supplies it in startup-only/standalone mode without enabling global appearance.
+function saoSettingsHostCSS(host) {
+  return `
+${host}{--sao-settings-host-base:color-mix(in srgb,var(--dsw-alias-bg-base,Canvas) 86%,var(--dsw-alias-brand-primary,Highlight) 14%);--sao-settings-ink:var(--dsw-alias-label-primary,CanvasText);--sao-settings-line:color-mix(in srgb,var(--sao-settings-ink) 12%,transparent);--sao-settings-card:color-mix(in srgb,var(--sao-settings-host-base) 12%,transparent);--sao-settings-hover:color-mix(in srgb,var(--sao-settings-host-base) 22%,transparent);--sao-settings-selected:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 10%,color-mix(in srgb,var(--sao-settings-ink) 5%,transparent));--dsw-alias-settings-card-fill:var(--sao-settings-card);--dsw-alias-bg-layer-1:var(--sao-settings-card);--dsw-alias-bg-layer-2:var(--sao-settings-card);--dsw-alias-bg-layer-3:var(--sao-settings-card);--dsw-alias-bg-module-platform:var(--sao-settings-card);--dsw-alias-label-secondary:color-mix(in srgb,var(--sao-settings-ink) 88%,var(--dsw-alias-bg-base,Canvas));--dsw-alias-label-tertiary:var(--dsw-alias-label-secondary);--dsw-alias-border-l1:var(--sao-settings-line);--dsw-alias-border-l2:var(--sao-settings-line);color:var(--sao-settings-ink);isolation:isolate;border:0!important;border-radius:32px!important;corner-shape:round!important;background:transparent!important;box-shadow:0 24px 72px rgb(8 15 28 / .22),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 9%,transparent)!important}
+${host}::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;corner-shape:round;background:linear-gradient(135deg,rgb(255 255 255 / .12),transparent 30%,transparent 75%,rgb(255 255 255 / .04)),color-mix(in srgb,var(--sao-settings-host-base) calc(60% * var(--sao-settings-window-alpha,.8)),transparent)!important;backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;-webkit-backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;box-shadow:inset 0 1px 0 rgb(255 255 255 / .48),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 8%,transparent)!important}
+${host}>:is(div,main,section):has([data-slot="settings.section"],[data-sao-settings]),
+${host} [data-slot="settings.section"],
+${host} [data-slot="settings.section"]>:is(div,main,section,article){background:transparent!important;box-shadow:none!important}
+${host}>nav{background:transparent!important;border-color:var(--sao-settings-line)}
+${host}>nav button{border-radius:14px;corner-shape:round!important;color:var(--sao-settings-ink)}
+${host}>nav button:hover{background:var(--sao-settings-hover)}
+${host}>nav button[aria-current="true"]{background:var(--sao-settings-selected)!important;box-shadow:inset 0 0 0 1px var(--sao-settings-line);font-weight:600}
+${host}>nav button:focus-visible{outline:2px solid color-mix(in srgb,var(--sao-settings-ink) 65%,var(--dsw-alias-bg-base,Canvas));outline-offset:-3px}
+/* These verified native/plugin card roots use an opaque base instead of the
+   settings layer tokens. Preserve their content, semantic borders and controls. */
+${host} [data-slot="settings.section"] :is(.Wsg8iW_card,._2vuxea_group,.vr-ia-plugin-card,.VqXecW_installedSkeletonCard){background:var(--sao-settings-card)!important;border-radius:22px;corner-shape:round!important}
+${host} [data-slot="settings.section"] .Wsg8iW_card.Wsg8iW_cardActive{background:var(--sao-settings-selected)!important}
+/* The sticky market search must still mask scrolling content beneath it. */
+${host} [data-slot="settings.section"] .nUhMVa_stickyHead,
+${host} [data-slot="settings.section"] .nUhMVa_stickyHead::before{background:var(--sao-settings-host-base)!important}
+`;
+}
 function mountSAOSettings(container, api) {
   'use strict';
   const doc = container.ownerDocument;
@@ -70,7 +93,7 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-switch input{position:absolute;opacity:0;width:44px;height:28px;margin:0;cursor:pointer}
 [data-sao-settings] .sao-switch-track{width:44px;height:26px;border-radius:999px;corner-shape:round!important;background:color-mix(in srgb,var(--sao-ink) 30%,var(--sao-base));pointer-events:none;position:relative;border:1px solid transparent;transition:background .15s,border-color .15s}
 [data-sao-settings] .sao-switch-track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;corner-shape:round!important;background:var(--sao-base);transition:transform .15s,background .15s}
-[data-sao-settings] .sao-switch input:checked + span{background:var(--sao-mark);border-color:var(--sao-mark)}
+[data-sao-settings] .sao-switch input:checked + span{background:color-mix(in srgb,var(--sao-accent) 92%,black);border-color:var(--sao-mark)}
 [data-sao-settings] .sao-switch input:checked + span::after{transform:translateX(18px);background:var(--sao-base)}
 [data-sao-settings] .sao-switch input:focus-visible + span{outline:2px solid var(--sao-focus);outline-offset:4px}
 [data-sao-settings] fieldset{border:1px solid var(--sao-line);border-radius:var(--sao-radius-surface);background:color-mix(in srgb,var(--sao-glass-base) 12%,transparent);box-shadow:inset 0 1px 0 var(--sao-glint);padding:16px;margin:20px 0;min-width:0}
@@ -190,13 +213,9 @@ function mountSAOSettings(container, api) {
 [data-sao-settings]{container-type:inline-size;container-name:sao-settings}
 @media(max-width:720px){[data-sao-settings]{padding:18px 16px}[data-sao-settings] .sao-layout{grid-template-columns:minmax(0,1fr);gap:24px}[data-sao-settings] .sao-scene{height:180px}[data-sao-settings] .sao-tab{flex:1;padding-inline:10px}[data-sao-settings] .sao-head{margin-bottom:16px}}
 @media(prefers-reduced-motion:reduce){[data-sao-settings] *,[data-sao-settings] *::before,[data-sao-settings] *::after{transition:none!important;animation:none!important}}
-/* One shared glass frame for the active SAO settings page. This style is
-   mounted with that page, so other settings and account menus retain ownership. */
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings]){--sao-settings-host-base:color-mix(in srgb,var(--dsw-alias-bg-base,Canvas) 86%,var(--dsw-alias-brand-primary,Highlight) 14%);--dsw-alias-settings-card-fill:transparent;isolation:isolate;border:0!important;border-radius:32px!important;corner-shape:round!important;background:transparent!important;box-shadow:0 24px 72px rgb(8 15 28 / .22),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 9%,transparent)!important}
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;corner-shape:round;background:linear-gradient(135deg,rgb(255 255 255 / .12),transparent 30%,transparent 75%,rgb(255 255 255 / .04)),color-mix(in srgb,var(--sao-settings-host-base) calc(60% * var(--sao-settings-window-alpha,.8)),transparent)!important;backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;-webkit-backdrop-filter:var(--sao-settings-host-filter,blur(24px) saturate(1.12))!important;box-shadow:inset 0 1px 0 rgb(255 255 255 / .48),inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,CanvasText) 8%,transparent)!important}
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])>:is(div,main,section):has([data-sao-settings]),
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-slot="settings.section"]:has([data-sao-settings]),
-:is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-slot="settings.section"]>:has([data-sao-settings]){background:transparent!important;box-shadow:none!important}
+/* Standalone/startup-only fallback; full appearance installs the same shell
+   before any settings category has been opened. */
+${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])')}
 :is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-sao-settings]{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:8px 0 24px!important;margin:0!important}
 :is(dialog,[role="dialog"])[data-shortcut-modal="settings"] [data-sao-settings] :is(fieldset,.sao-preview){backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 

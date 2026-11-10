@@ -40,9 +40,12 @@ function applySAOControlStates(ctx) {
   // generic selected bottom edge under a circular one-pixel outline.
   const control = `${scope} ${candidates}${safe}:not([data-conversation-tabs]>[role="tab"])`;
   // An explicit false ARIA state must win over an obsolete native active class.
-  const selected = ':is([aria-checked="true"],[aria-checked="mixed"],[aria-selected="true"],[aria-pressed="true"],[aria-pressed="mixed"],[aria-current="page"],[aria-current="true"],[data-state="checked"],[data-state="indeterminate"],[data-state="selected"],[data-state="pressed"],[data-state="active"],[data-state="on"],[data-on]:not([data-on="false"]):not([data-state="off"]):not([data-off]:not([data-off="false"])),._pill_rs966_1._active_rs966_26:not([aria-pressed="false"]):not([aria-selected="false"]))';
+  const selected = ':is([aria-checked="true"],[aria-checked="mixed"],[aria-selected="true"],[aria-pressed="true"],[aria-pressed="mixed"],[aria-current="page"],[aria-current="true"],[data-state="checked"],[data-state="indeterminate"],[data-state="selected"],[data-state="pressed"],[data-state="active"],[data-state="on"],[data-on]:not([data-on="false"]):not([data-state="off"]):not([data-off]:not([data-off="false"])),._pill_rs966_1._active_rs966_26:not([aria-checked="false"]):not([aria-pressed="false"]):not([aria-selected="false"]))';
   const off = ':is([aria-checked="false"],[data-state="unchecked"],[data-state="off"],[data-off]:not([data-off="false"]),[data-on="false"])';
   const nativeTrack = `${scope} ${nativeSwitch}${safe}`;
+  // Match generic selection specificity before narrowing to the native compact
+  // switch, otherwise its selected bottom-edge recipe wins over track styling.
+  const nativeOn = `${control}${selected}:is(${nativeSwitch})[aria-checked="true"]`;
   const input = `${scope} input:is([type="checkbox"],[type="radio"])${safe}`;
   // Official ConversationRoot owns this row, populated from conversation.view:
   // chat (ui-chat), trajectory (ui-trajectory), context/fleet (dsh-context),
@@ -71,6 +74,8 @@ ${scope}{
   --sao-control-selected-hover:color-mix(in srgb,var(--sao-control-tint) 32%,var(--sao-control-hover));
   --sao-control-selected-down:color-mix(in srgb,var(--sao-control-tint) 42%,var(--sao-control-down));
   --sao-control-stroke:color-mix(in srgb,var(--sao-control-ink) 20%,transparent);
+  --sao-switch-stroke:color-mix(in srgb,var(--sao-control-ink) 12%,var(--sao-control-accent) 8%);
+  --sao-switch-thumb:color-mix(in srgb,var(--sao-control-ink) 65%,var(--dsw-alias-bg-base,Canvas));
   --sao-control-sheen:color-mix(in srgb,white 35%,transparent);
   --sao-control-focus:var(--dsw-focus-ring-color,var(--sao-control-edge));
 }
@@ -92,17 +97,24 @@ ${control}${selected}{
 }
 ${control}:active{background-color:var(--sao-control-down)!important}
 ${control}${selected}:active{background-color:var(--sao-control-selected-down)!important}
-/* Keep the native compact switch's strong track/knob contrast and translation.
+/* Keep native compact switch dimensions, off paint and thumb translation.
+   Selected tracks get one concentric stroke, with no lower strip or sheen.
    A role=switch wrapping a label is intentionally not treated as a tiny track. */
+/* Resolve the current page accent here: root aliases predate the SAO palette. */
+${nativeTrack}{
+  --sao-switch-selected:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 92%,black);
+  --sao-switch-selected-hover:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 94%,black);
+  --sao-switch-selected-down:color-mix(in srgb,var(--dsw-alias-brand-primary,Highlight) 90%,black);
+}
 ${nativeTrack}${off}{background-color:color-mix(in srgb,var(--sao-control-ink) 25%,var(--dsw-alias-bg-base,Canvas))!important}
-${nativeTrack}[aria-checked="true"]{background-color:color-mix(in srgb,var(--sao-control-accent) 80%,var(--sao-control-ink))!important;box-shadow:inset 0 0 0 1px var(--sao-control-edge),inset 0 1px 0 var(--sao-control-sheen)!important}
-${nativeTrack}[aria-checked="true"]>._thumb_1ik0f_33{background-color:var(--dsw-alias-label-on-brand,var(--dsw-alias-label-primary-foreground,Canvas))!important}
+${nativeOn}{background-color:var(--sao-switch-selected)!important;box-shadow:inset 0 0 0 1px var(--sao-switch-stroke)!important}
+${nativeOn}>._thumb_1ik0f_33{background-color:var(--sao-switch-thumb)!important}
 @media(hover:hover){
   ${nativeTrack}${off}:hover{background-color:color-mix(in srgb,var(--sao-control-ink) 32%,var(--dsw-alias-bg-base,Canvas))!important}
-  ${nativeTrack}[aria-checked="true"]:hover{background-color:color-mix(in srgb,var(--sao-control-accent) 68%,var(--sao-control-ink))!important}
+  ${nativeOn}:hover{background-color:var(--sao-switch-selected-hover)!important}
 }
 ${nativeTrack}${off}:active{background-color:color-mix(in srgb,var(--sao-control-ink) 39%,var(--dsw-alias-bg-base,Canvas))!important}
-${nativeTrack}[aria-checked="true"]:active{background-color:color-mix(in srgb,var(--sao-control-accent) 56%,var(--sao-control-ink))!important}
+${nativeOn}:active{background-color:var(--sao-switch-selected-down)!important}
 ${input}{accent-color:var(--sao-control-edge)}
 /* Never suppress the host keyboard ring; menu items that only had a focus fill
    receive the same visible ring as switches and inputs. */
@@ -141,9 +153,9 @@ ${material}{box-shadow:inset 0 1px 0 color-mix(in srgb,white calc(32% * var(--sa
 @media(forced-colors:active){
   ${control},${conversationControl}{background:Canvas!important;color:CanvasText!important;box-shadow:none!important;outline:1px solid ButtonText!important;outline-offset:-1px!important}
   ${control}${selected},${conversationControl}${selected}{background:Highlight!important;color:HighlightText!important;outline:2px solid Highlight!important}
-  ${nativeTrack}[aria-checked="true"]{background-color:Highlight!important}
+  ${nativeOn},${nativeOn}:hover,${nativeOn}:active{background:Highlight!important;color:HighlightText!important;box-shadow:none!important;outline:2px solid Highlight!important}
   ${nativeTrack}${off}{background-color:Canvas!important}
-  ${nativeTrack}[aria-checked="true"]>._thumb_1ik0f_33{background-color:HighlightText!important}
+  ${nativeOn}>._thumb_1ik0f_33{background-color:HighlightText!important}
   ${control}:focus-visible,${conversationControl}:focus-visible,${input}:focus-visible{outline:2px solid Highlight!important;outline-offset:2px!important}
   ${material}{box-shadow:none!important}
   ${conversationTabs}${safe}{background-color:Canvas!important;box-shadow:none!important}

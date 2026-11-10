@@ -302,13 +302,20 @@ test('glass settings stay translucent and operable in both themes and narrow pan
     await page.setViewportSize({ width: 800, height: 900 });
     await page.evaluate(async hosted => {
       document.querySelector('#optical-scroll')?.remove();
+      document.querySelector('#optical-scene')?.remove();
+      // A positive GPU control needs a real native conversation and wallpaper.
+      // Page-backed tooltips now correctly use CSS blur without a GPU canvas.
+      const scene = document.createElement('div'); scene.id = 'optical-scene';
+      scene.style.cssText = 'position:fixed;left:0;top:0;display:flex;width:800px;height:900px;z-index:0';
+      scene.innerHTML = '<section style="width:700px;height:900px"><div data-slot="conversation.header"><header style="height:48px"></header></div><div data-slot="main.conversation" style="height:852px"></div></section><aside data-rightbar-col style="width:100px;height:900px"><div data-slot="rightbar"><div data-slot="rightbar.session"><header style="height:48px"></header></div><div data-sidebar-right-panel="push" data-sidebar-right-open style="height:852px"></div></div></aside>';
+      document.body.prepend(scene);
       start('light'); document.querySelector('#settings').style.cssText = ''; hostMode(hosted);
       const container = document.querySelector(hosted ? '#settings-host' : '#settings');
       container.style.height = '320px'; container.style.overflow = 'auto';
       const optical = document.createElement('section'); optical.id = 'optical-scroll';
-      optical.style.cssText = 'position:fixed;left:10px;top:10px;width:180px;height:120px;overflow:auto;z-index:50';
+      optical.style.cssText = 'position:fixed;left:10px;top:600px;width:180px;height:120px;overflow:auto;z-index:50';
       optical.innerHTML = '<div style="height:700px"><div id="scroll-glass" role="tooltip" style="width:160px;height:80px;border-radius:18px">Unrelated glass surface</div></div>';
-      document.body.appendChild(optical); api.set({ windowOpacity: .7 });
+      document.body.appendChild(optical); api.set({ windowOpacity: .7, wallpaper: 'builtin-1' });
       await paint(); await paint(); await paint();
     }, hosted);
     await page.waitForFunction(() => !!document.querySelector('#scroll-glass > canvas[data-sao-liquid]'));
@@ -346,7 +353,7 @@ test('glass settings stay translucent and operable in both themes and narrow pan
     assert.ok(result.affectedSurfaceWork.liquidDraws > 0, 'scrolling a true glass ancestor still redraws its liquid surface');
     assert.deepEqual(result.after, result.before, 'real API local scrolling preserves relative masks');
   }
-  await page.evaluate(() => { stop(); document.querySelector('#optical-scroll')?.remove(); }); assert.deepEqual(errors, [], 'no browser exceptions');
+  await page.evaluate(() => { stop(); document.querySelector('#optical-scroll')?.remove(); document.querySelector('#optical-scene')?.remove(); }); assert.deepEqual(errors, [], 'no browser exceptions');
   fs.writeFileSync(path.join(screenshotDir, 'results.json'), JSON.stringify(results, null, 2));
   fs.writeFileSync(path.join(screenshotDir, 'tint-results.json'), JSON.stringify(tintResults, null, 2));
   console.log('Verified 24 theme/tab/width combinations and 12 blue/orange/green tint variants across both themes and host modes, unchanged alpha/neutral hairlines, strict two-extreme-backdrop AA helper text, controls and preview; screenshots: ' + screenshotDir);

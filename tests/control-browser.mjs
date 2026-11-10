@@ -4,7 +4,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile, mkdir, writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
 import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 let chromium;
@@ -14,7 +15,7 @@ const source = await readFile(new URL('../source/control-states.js', import.meta
 
 // Native rules below are the installed host's Pill / Switch / Menu contract.
 // Tests use an isolated origin and fixture; they do not alter a running DSH tab.
-const fixture = `<!doctype html><html><head><style>
+const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>
 :root{--dsw-alias-label-primary:#17212e;--dsw-alias-bg-base:#fff;--dsw-alias-brand-primary:#4080c0;--dsw-alias-label-on-brand:white;--dsw-alias-label-primary-foreground:white;--dsw-alias-switch-thumb:white;--dsw-focus-ring-width:2px;--dsw-focus-ring-color:#2377bb;color:#17212e;background:#fff}
 html[data-test-dark]{--dsw-alias-label-primary:#ecf1f8;--dsw-alias-bg-base:#121823;--dsw-alias-brand-primary:#8cc8f4;--dsw-alias-label-on-brand:#111827;--dsw-alias-label-primary-foreground:#111827;--dsw-alias-switch-thumb:#ecf1f8;color:#ecf1f8;background:#121823}
 body{padding:32px;font:14px system-ui}button,[role=option],[role=tab]{margin:5px;padding:8px;border-radius:8px;border:0;background:transparent;color:inherit}
@@ -284,5 +285,118 @@ test('conversation view row: compact pills, real header clearance, ARIA, states 
     await page.emulateMedia({forcedColors:'none'});
     await page.evaluate(()=>window.disposers.forEach(fn=>fn()));
     assert.deepEqual(await snapshot(),baseline,'plugin disposal restores original row');
+  }finally{await browser.close()}
+});
+
+// The plugin page uses native 36x20 Switch controls, not the separate Pill
+// component. Keep the real track/thumb geometry and include semantic decoys so
+// a selector that accidentally changes every switch or pill cannot pass.
+const switchFixture = fixture.replace(/<body>[\s\S]*<\/body>/, `<body><main id="switchEvidence" style="width:520px;padding:20px;border:1px solid #8993a033;border-radius:12px">
+<h2 style="font-size:16px;margin:0 0 20px">Native compact switches · 36 × 20</h2>
+${[['switchOff','Inactive',false,''],['switchOn','Enabled',true,''],['switchDisabled','Disabled enabled',true,'disabled'],['switchDanger','Danger enabled',true,'data-danger']].map(([id,label,on,attrs])=>`<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0"><span>${label}</span><button id="${id}" aria-label="${label}" class="_switch_1ik0f_5${attrs==='disabled'?' disabled':''}${attrs==='data-danger'?' danger':''}" role="switch" aria-checked="${on}" ${attrs}><span class="_thumb_1ik0f_33"></span></button></div>`).join('')}
+<hr style="opacity:.2;margin:24px 0"><p>Other selected controls retain their existing recipe</p>
+<button id="generic" aria-pressed="true">Generic selected</button>
+<button id="nativeActive" class="_pill_rs966_1 _interactive_rs966_16 _active_rs966_26">Native Pill</button>
+<button id="nativeChecked" role="checkbox" aria-checked="true" class="_pill_rs966_1 _interactive_rs966_16">Checked Pill</button>
+<button id="nativeFalse" role="checkbox" aria-checked="false" class="_pill_rs966_1 _interactive_rs966_16 _active_rs966_26">Checked false</button>
+<button id="nativePlain" class="_pill_rs966_1 _interactive_rs966_16">Inactive Pill</button>
+<button id="semanticOff" role="switch" aria-checked="false">Label switch</button>
+</main></body>`);
+
+test('native plugin switches: even softened active track, thumb contrast, scope, keyboard and system modes', {skip}, async () => {
+  const browser = await chromium.launch({headless:true});
+  try {
+    const page = await browser.newPage({viewport:{width:700,height:640}});
+    await page.route('http://sao-switches.test/', route=>route.fulfill({contentType:'text/html',body:switchFixture}));
+    await page.goto('http://sao-switches.test/');
+    const snapshot = id => page.locator('#'+id).evaluate(el=>{
+      const c=getComputedStyle(el),r=el.getBoundingClientRect(),thumb=el.firstElementChild,t=thumb&&getComputedStyle(thumb),tr=thumb?.getBoundingClientRect();
+      return {background:c.backgroundColor,shadow:c.boxShadow,color:c.color,outline:c.outlineStyle,outlineWidth:c.outlineWidth,opacity:c.opacity,image:c.backgroundImage,
+        geometry:{width:r.width,height:r.height,padding:c.padding,radius:c.borderRadius,thumbWidth:tr?.width,thumbHeight:tr?.height,thumbX:tr&&tr.x-r.x,thumbY:tr&&tr.y-r.y},
+        thumb:t&&{color:t.backgroundColor,transform:t.transform,shadow:t.boxShadow},role:el.getAttribute('role'),checked:el.getAttribute('aria-checked'),disabled:el.disabled};
+    });
+    const initialGeometry=(await snapshot('switchOn')).geometry;
+    const protectedBaseline={};
+    for(const dark of [false,true]){
+      await page.evaluate(d=>document.documentElement.toggleAttribute('data-test-dark',d),dark);
+      protectedBaseline[dark]=Object.fromEntries(await Promise.all(['switchDisabled','switchDanger'].map(async id=>[id,await snapshot(id)])));
+    }
+    await page.evaluate(()=>document.documentElement.removeAttribute('data-test-dark'));
+    const evidence={fixture:'isolated real native 36x20 Switch contract; no private user data',checks:[],contrast:[]};
+    const evidenceDir=process.env.SAO_CONTROL_EVIDENCE_DIR;
+    if(evidenceDir)await mkdir(evidenceDir,{recursive:true});
+    await page.addScriptTag({content:source+'\nwindow.disposers=[];applySAOControlStates({effect(fn){disposers.push(fn())}});'});
+    const capture=async name=>{if(evidenceDir)await page.locator('#switchEvidence').screenshot({path:join(evidenceDir,`native-switches-${name}.png`)})};
+    for(const dark of [false,true]){
+      await page.evaluate(d=>document.documentElement.toggleAttribute('data-test-dark',d),dark);
+      await page.mouse.move(690,630);
+      const on=await snapshot('switchOn'),off=await snapshot('switchOff');
+      assert.deepEqual(on.geometry,initialGeometry,'native size, padding, radius and translated thumb position preserved');
+      assert.equal(on.geometry.width,36);assert.equal(on.geometry.height,20);
+      assert.equal(on.geometry.thumbWidth,16);assert.equal(on.geometry.thumbHeight,16);
+      assert.equal(on.geometry.thumbX,18);assert.equal(off.geometry.thumbX,2,'off thumb remains on the left');
+      assert.equal(on.role,'switch');assert.equal(on.checked,'true');assert.equal(on.disabled,false);
+      assert.notEqual(on.background,off.background,'enabled track remains distinguishable from inactive');
+      assert.notEqual(on.thumb.color,off.thumb.color,'enabled knob is distinguishable while off knob stays native');
+      assert.equal(on.thumb.shadow,off.thumb.shadow,'no extra thumb shadow');
+      assert.match(on.shadow,/0px 0px 0px 1px inset$/,'one concentric one-pixel selected track stroke');
+      assert.doesNotMatch(on.shadow,/inset.*inset|-2px/,'no bottom strip or doubled selected edge');
+      assert.equal(on.image,'none','no directional background image');
+      assert.equal(off.background,(await snapshot('semanticOff')).background,'off track keeps the existing semantic off fill');
+      for(const id of ['generic','nativeActive','nativeChecked'])assert.match((await snapshot(id)).shadow,/0px -2px 0px 0px inset/,`${id}: generic selected recipe stays unchanged`);
+      assert.equal((await snapshot('nativeFalse')).shadow,(await snapshot('nativePlain')).shadow,'explicit checked=false defeats stale native active class');
+      const alpha=await page.locator('#switchOn').evaluate(el=>{const c=getComputedStyle(el),canvas=document.createElement('canvas'),x=canvas.getContext('2d');const a=value=>{x.clearRect(0,0,1,1);x.fillStyle=value;x.fillRect(0,0,1,1);return x.getImageData(0,0,1,1).data[3]/255};return{fill:a(c.backgroundColor),stroke:a(c.boxShadow.replace(/ 0px.*$/,''))}});
+      assert.equal(alpha.fill,1,'enabled track uses the selected accent directly');assert.ok(alpha.stroke<=.21,'selected stroke is translucent');
+      evidence.checks.push({scheme:dark?'dark':'light',on,off,alpha});
+      for(const [id,before]of Object.entries(protectedBaseline[dark]))assert.deepEqual(await snapshot(id),before,`${id}: disabled/danger control unchanged`);
+      await capture(`${dark?'dark':'light'}-rest`);
+      await page.locator('#switchOn').hover();const hover=await snapshot('switchOn');
+      assert.notEqual(hover.background,on.background);assert.equal(hover.shadow,on.shadow,'hover keeps the uniform edge');
+      await capture(`${dark?'dark':'light'}-hover`);
+      await page.mouse.down();const down=await snapshot('switchOn');
+      assert.notEqual(down.background,hover.background);assert.equal(down.shadow,on.shadow,'press keeps the uniform edge');
+      assert.deepEqual(down.geometry,on.geometry,'press never moves the control or thumb');
+      await capture(`${dark?'dark':'light'}-press`);await page.mouse.up();await page.mouse.move(690,630);
+      await page.locator('#switchOff').focus();await page.keyboard.press('Tab');
+      const focused=await snapshot('switchOn');assert.equal(focused.outline,'solid');assert.equal(focused.outlineWidth,'2px');
+      await capture(`${dark?'dark':'light'}-keyboard`);await page.evaluate(()=>document.activeElement.blur());
+      await page.locator('#switchOn').evaluate(async el=>{el.setAttribute('aria-checked','false');await Promise.allSettled(el.getAnimations({subtree:true}).map(animation=>animation.finished))});
+      assert.deepEqual(await snapshot('switchOn'),off,'state false restores exact inactive rendering and position');
+      await page.locator('#switchOn').evaluate(async el=>{el.setAttribute('aria-checked','true');await Promise.allSettled(el.getAnimations({subtree:true}).map(animation=>animation.finished))});
+      assert.deepEqual(await snapshot('switchOn'),on,'state true restores exact enabled rendering and position');
+    }
+    // Composite track and thumb on the scheme's canvas; RGB cube corners bound
+    // arbitrary sRGB accent brightness, plus representative mid-tone accents.
+    const measure=()=>page.locator('#switchOn').evaluate(el=>{
+      const c=getComputedStyle(el),t=getComputedStyle(el.firstElementChild),root=getComputedStyle(document.documentElement),canvas=document.createElement('canvas'),x=canvas.getContext('2d');
+      const rgb=layers=>{x.clearRect(0,0,1,1);for(const color of layers){x.fillStyle=color;x.fillRect(0,0,1,1)}return [...x.getImageData(0,0,1,1).data].slice(0,3)};
+      const lum=rgb=>rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
+      const ratio=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
+      const base=root.getPropertyValue('--dsw-alias-bg-base');
+      const track=rgb([base,c.backgroundColor]),thumb=rgb([base,c.backgroundColor,t.backgroundColor]),label=rgb([root.getPropertyValue('--dsw-alias-label-primary')]);
+      return{thumb:ratio(thumb,track),label:ratio(label,rgb([base])),track,accent:rgb([root.getPropertyValue('--dsw-alias-brand-primary')])};
+    });
+    for(const dark of [false,true])for(const accent of ['#000000','#ffffff','#ff0000','#00ff00','#0000ff','#ffff00','#00ffff','#ff00ff','#4080c0','#8cc8f4','#f5a623','#7855a8']){
+      await page.evaluate(({dark,accent})=>{document.documentElement.toggleAttribute('data-test-dark',dark);document.documentElement.style.setProperty('--dsw-alias-brand-primary',accent)},{dark,accent});
+      const check=async state=>{const ratios=await measure();evidence.contrast.push({scheme:dark?'dark':'light',accent,state,...ratios});const fraction={rest:.92,hover:.94,press:.90}[state];assert.ok(ratios.track.every((value,i)=>Math.abs(value-ratios.accent[i]*fraction)<=1),`enabled fill remains only slightly darker than accent: ${dark}/${accent}/${state}`);assert.ok(ratios.label>=4.5,`label ${dark}/${accent}/${state}: ${ratios.label}`)};
+      await page.mouse.move(690,630);await check('rest');await page.locator('#switchOn').hover();await check('hover');await page.mouse.down();await check('press');await page.mouse.up();
+    }
+    await page.mouse.move(690,630);
+    await page.evaluate(()=>{document.documentElement.removeAttribute('data-test-dark');document.documentElement.style.removeProperty('--dsw-alias-brand-primary')});
+    await page.emulateMedia({forcedColors:'active',reducedMotion:'reduce'});
+    const forced=await snapshot('switchOn');assert.equal(forced.shadow,'none');assert.equal(forced.outlineWidth,'2px');assert.notEqual(forced.background,(await snapshot('switchOff')).background);
+    await page.locator('#switchOn').hover();assert.equal((await snapshot('switchOn')).background,forced.background,'forced highlight wins over hover tint');
+    await page.mouse.down();assert.equal((await snapshot('switchOn')).background,forced.background,'forced highlight wins over press tint');await page.mouse.up();await page.mouse.move(690,630);
+    await page.locator('#switchOff').focus();await page.keyboard.press('Tab');assert.equal((await snapshot('switchOn')).outlineWidth,'2px','system keyboard outline preserved');await capture('forced-colors');
+    await page.emulateMedia({forcedColors:'none',reducedMotion:'reduce'});
+    assert.equal(await page.locator('#switchOn').evaluate(el=>el.getAnimations().length),0,'track introduces no motion under reduced-motion');
+    assert.equal(await page.locator('#switchOn span').evaluate(el=>getComputedStyle(el).transform),'matrix(1, 0, 0, 1, 16, 0)','native thumb remains at enabled position under reduced-motion');
+    if(evidenceDir){
+      evidence.result='pass';evidence.minimumThumbContrast=Math.min(...evidence.contrast.map(row=>row.thumb));evidence.minimumLabelContrast=Math.min(...evidence.contrast.map(row=>row.label));
+      await writeFile(join(evidenceDir,'control-evidence.json'),JSON.stringify(evidence,null,2)+'\n');
+      await writeFile(join(evidenceDir,'native-switch-fixture.html'),switchFixture.replace('</body>',`<script>${source}\napplySAOControlStates({effect(fn){fn()}});</script></body>`));
+    }
+    await page.evaluate(()=>window.disposers.forEach(fn=>fn()));
+    assert.equal(await page.locator('style[data-sao-control-states]').count(),0,'disposal removes all switch paint');
   }finally{await browser.close()}
 });

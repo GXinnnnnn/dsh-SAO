@@ -6,7 +6,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   window[instanceKey]?.dispose?.();
   // Retire DOM left by versions that did not expose a disposable controller.
   for (const el of document.querySelectorAll('style[data-sao-appearance],style[data-sao-palette],[data-sao-wallpaper],[data-sao-liquid]')) el.remove();
-  const materialAttributes = ['data-sao-material','data-sao-positioned','data-sao-surface','data-sao-zone','data-sao-core-surface'];
+  const materialAttributes = ['data-sao-material','data-sao-positioned','data-sao-surface','data-sao-zone','data-sao-core-surface','data-sao-backdrop'];
   for (const el of document.querySelectorAll('[data-sao-context]')) el.removeAttribute('data-sao-context');
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
@@ -372,7 +372,28 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     const mainBody = boxFor(outlet?.parentElement || outlet);
     const right = boxFor(document.querySelector('[data-slot="rightbar"]')?.parentElement);
     const {column,frame} = sceneLayoutRoots(ancestors(mainBody),ancestors(right));
-    if (!outlet || !column || !frame) { background.remove(); return; }
+    let visible = outlet && column && frame && !outlet.closest('[hidden],[aria-hidden="true"],[inert]') && column.getBoundingClientRect().width > 0 && column.getBoundingClientRect().height > 0 && getComputedStyle(column).visibility === 'visible' && getComputedStyle(outlet).visibility === 'visible';
+    // display:contents is a valid outlet; a display:none wrapper is not. Its
+    // fixed-size outer column can remain measurable while the scene is hidden.
+    for (let node = outlet; visible && node && node !== column; node = node.parentElement) if (getComputedStyle(node).display === 'none') visible = false;
+    if (!visible) {
+      // Native pages can unmount (or retain a hidden) conversation. Forget its
+      // geometry and ownership so a later portal cannot revive that old scene.
+      background.remove();
+      frameHost?.removeAttribute('data-sao-wall-frame'); frameHost?.removeAttribute('data-sao-wall-positioned');
+      for (const el of layoutTouched) for (const attr of ['data-sao-wall-column','data-sao-wall-right','data-sao-browser-only','data-sao-main-joined','data-sao-right-joined']) el.removeAttribute(attr);
+      for (const el of shellTouched) for (const attr of ['data-sao-shell','data-sao-shell-center','data-sao-shell-sidebar']) el.removeAttribute(attr);
+      layoutTouched.clear(); shellTouched.clear();
+      if (frameHost) resizeObserver?.disconnect();
+      adaptiveObserved.clear(); contextCardsObserved.clear(); contextViewportsObserved.clear(); rightPanesObserved.clear();
+      for (const node of contextTouched) node.removeAttribute('data-sao-context'); contextTouched.clear();
+      for (const [nodes,attribute] of [[rightPanesTouched,'data-sao-right-pane'],[rightRootsTouched,'data-sao-right-root'],[browserPanesTouched,'data-sao-browser-pane']]) { for (const node of nodes) node.removeAttribute(attribute); nodes.clear(); }
+      contextCardPaths = []; browserCardPaths = []; rightSurfacePaths = []; conversationSurfacePaths = []; onlyBrowserRight = false;
+      frameHost = wallHost = observedRight = null; rightBounds = null; rightJoined = false;
+      conversationBounds = bounds = imageBounds = {x:0,y:0,width:0,height:0};
+      conversationBackdrop.hidden = rightBackdrop.hidden = rightBase.hidden = true;
+      return;
+    }
     const frameChanged = frame !== frameHost;
     if (frameChanged) {
       frameHost?.removeAttribute('data-sao-wall-frame');
@@ -454,8 +475,24 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     '[role="dialog"][data-shortcut-modal="settings"]'
   ];
   const excluded = '[data-plugin],[data-pet],[data-whale],[data-slot="sidebar"],[data-slot="shell.sidebar"],iframe,canvas,video';
-  const saoSettingsDialogSelector = ':is(dialog,[role="dialog"])[data-shortcut-modal="settings"]:has([data-sao-settings])';
+  const settingsDialogSelector = ':is(dialog,[role="dialog"])[data-shortcut-modal="settings"]';
   const windowSelector = '[data-menu-material],[role="dialog"],[role="alertdialog"],[role="tooltip"],[role="alert"][style*="--dsh-toast-hold"],[data-popover-content]';
+  function windowUsesWallpaper(el) {
+    if (!background.isConnected || !imageBounds.width || !imageBounds.height) return false;
+    const r = el.getBoundingClientRect(), area = imageBounds;
+    if (r.left < area.x || r.top < area.y || r.right > area.x + area.width || r.bottom > area.y + area.height) return false;
+    // Portals do not inherit scene ownership. Probe the visible backing branch,
+    // excluding the portal itself and its layout ancestors. No DOM pixels/text
+    // are captured; CSS owns any unknown or occluded backdrop (including modals).
+    const inset = Math.min(8, r.width / 4, r.height / 4);
+    const points = [[r.left + r.width / 2,r.top + r.height / 2],
+      [r.left + inset,r.top + inset],[r.right - inset,r.top + inset],
+      [r.left + inset,r.bottom - inset],[r.right - inset,r.bottom - inset]];
+    return points.every(([x,y]) => {
+      const backing = document.elementsFromPoint(x,y).find(node => node !== el && !el.contains(node) && !node.contains(el));
+      return !!backing?.closest('[data-sao-wall-column]') && !backing.closest(windowSelector + ',[data-sao-browser-pane]');
+    });
+  }
   function chooseSurfaces() {
     const windows = [...document.querySelectorAll(windowSelector)];
     const nodes = [...windows,...document.querySelectorAll(surfaceSelectors.join(','))];
@@ -594,6 +631,9 @@ ${background.parentElement ? `[data-sao-wall-frame]{isolation:isolate}[data-sao-
 [data-sao-zone="header"]{--sao-surface-alpha:${headerLayers.cardOpacity*100}%;--sao-surface-filter:${filter(p.headerOpacity,blur)};--sao-frost-filter:${filter(p.headerOpacity,blur,true)};--sao-optical-strength:${4*p.headerOpacity*(1-p.headerOpacity)}}
 [data-sao-zone="header-right"]{--sao-surface-alpha:${rightHeaderLayers.cardOpacity*100}%;--sao-surface-filter:${filter(rightHeaderAlpha,rightBlur)};--sao-frost-filter:${filter(rightHeaderAlpha,rightBlur,true)};--sao-optical-strength:${4*rightHeaderAlpha*(1-rightHeaderAlpha)}}
 [data-sao-zone="window"]{--sao-surface-alpha:${windowAlpha*100}%;--sao-surface-filter:none;--sao-frost-filter:${filter(windowAlpha,0,true)};--sao-optical-strength:${4*windowAlpha*(1-windowAlpha)};color:var(--dsw-alias-label-primary)!important}
+/* Outside a proven wallpaper scene the browser composites the actual page.
+   Keep the same fill and edge, without importing a remembered chat texture. */
+[data-sao-zone="window"][data-sao-backdrop="page"]{--sao-surface-filter:${filter(windowAlpha,12)}}
 body:has([data-menu-material][data-sao-material]) [data-menu-backing],
 [data-menu-material][data-sao-material]>div[aria-hidden="true"]{background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 [role="tooltip"]{--dsw-alias-tooltip-key-bg:transparent!important;--dsw-alias-tooltip-key-label:var(--dsw-alias-label-primary)!important}
@@ -620,7 +660,7 @@ section[data-testid="todo-panel"][data-sao-component]::before{content:"";positio
 html[data-windows-titlebar] [data-sidebar-right-panel="fullscreen"] [data-dockkit-column="0"] > [data-sao-surface="joined"]{border-top-left-radius:var(--dsh-windows-content-radius,16px)!important}
 [data-sao-material]::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;corner-shape:inherit;z-index:-1;background:color-mix(in srgb,var(--sao-material-base,#f4f6f9) var(--sao-surface-alpha),transparent);backdrop-filter:var(--sao-surface-filter,none);-webkit-backdrop-filter:var(--sao-surface-filter,none);border:0;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) calc(9% * var(--sao-optical-strength)),transparent)}
 [data-sao-surface="joined"]::before{box-shadow:none}
-[role="dialog"][data-shortcut-modal="settings"]{--dsw-alias-settings-card-fill:transparent;border-radius:28px!important;border-color:color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 9%,transparent)!important}
+${saoSettingsHostCSS(settingsDialogSelector)}
 [role="dialog"][data-shortcut-modal="settings"] :is(button[aria-label="关闭"],button[aria-label="Close"]){border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) 2%,transparent);color:var(--dsw-alias-label-primary);border-color:transparent}
 [data-composer-card][data-sao-material] :is([data-input-scroll],[data-input-scroll] > div,[data-composer-input]){border-color:transparent!important;box-shadow:none!important}
 [data-rightbar-col]:has([data-sao-material]) [data-sidebar-right-panel]{border-color:transparent!important;box-shadow:none!important;background:transparent!important}
@@ -652,7 +692,9 @@ ${saoBetterSidebarCSS(materialBase)}
     const isComposer = el => el.matches('[data-composer-card]') || !!el.querySelector(':scope > [data-slot="conversation.input.attachments"],:scope > [data-slot="conversation.input.overlay"]');
     const isRight = el => !isWindow(el) && !!el.closest('[data-rightbar-col],[data-slot="rightbar"],[data-slot="rightbar.session"]');
     const surfaceMode = el => isContextCard(el) ? contextGlass : isRight(el) ? rightGlass : p.glass;
-    const surfaces = glass ? chooseSurfaces().filter(el => surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el) || isComposer(el) || isContextCard(el))) : [];
+    // Native settings own one CSS glass shell across every registered category.
+    const surfaces = glass ? chooseSurfaces().filter(el => !el.matches(settingsDialogSelector) && surfaceMode(el) !== 'off' && (!isRight(el) || isRightHeader(el) || isComposer(el) || isContextCard(el))) : [];
+    const pageBackedWindows = new Set(surfaces.filter(el => isWindow(el) && !el.matches(settingsDialogSelector) && !windowUsesWallpaper(el)));
     // Include orphaned markers from earlier clients, not only nodes owned by this instance.
     let contextShapeChanged = false;
     for (const el of new Set([...touched,...document.querySelectorAll('[data-sao-material]')])) if (!surfaces.includes(el)) { if (isContextCard(el)) contextShapeChanged = true; for (const attr of materialAttributes) el.removeAttribute(attr); el.style.removeProperty('--sao-surface-alpha'); touched.delete(el); }
@@ -660,6 +702,8 @@ ${saoBetterSidebarCSS(materialBase)}
       if (!el.hasAttribute('data-sao-material') && getComputedStyle(el).position === 'static') el.setAttribute('data-sao-positioned','');
       if (el.getAttribute('data-sao-material') !== surfaceMode(el)) el.setAttribute('data-sao-material', surfaceMode(el));
       const zone = isContextCard(el) ? 'context' : isWindow(el) ? 'window' : isRightHeader(el) ? 'header-right' : isHeader(el) ? 'header' : isComposer(el) ? 'composer' : isRight(el) ? 'right' : 'conversation'; if (el.getAttribute('data-sao-zone') !== zone) el.setAttribute('data-sao-zone', zone);
+      if (pageBackedWindows.has(el)) { if (el.getAttribute('data-sao-backdrop') !== 'page') el.setAttribute('data-sao-backdrop','page'); }
+      else if (el.hasAttribute('data-sao-backdrop')) el.removeAttribute('data-sao-backdrop');
       if (zone !== 'conversation' && el.style.getPropertyValue('--sao-surface-alpha')) el.style.removeProperty('--sao-surface-alpha');
       const type = (isHeader(el) || isRightHeader(el) || el.matches(rightBodySelector) || el.matches('[data-dockkit-content],[data-dockkit-empty],[data-sidebar-right-panel]')) ? 'joined' : 'floating'; if (el.getAttribute('data-sao-surface') !== type) { if (isContextCard(el)) contextShapeChanged = true; el.setAttribute('data-sao-surface', type); }
       touched.add(el);
@@ -717,7 +761,7 @@ ${saoBetterSidebarCSS(materialBase)}
     paintBackdrop(rightBackdrop,rightBounds,rightOpacity,rightBlur,'16px','round',rightGlass);
     const isConversationSurface = el => !isRight(el) && !isWindow(el);
     // Nonzero background blur uses the CSS backdrop path rather than a costly or mismatched GPU approximation.
-    const liquidSurfaces = surfaces.filter(el => !el.matches(saoSettingsDialogSelector) && surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
+    const liquidSurfaces = surfaces.filter(el => !el.matches(settingsDialogSelector) && !pageBackedWindows.has(el) && surfaceMode(el) === 'liquid' && (isContextCard(el) || !(isRight(el) ? rightBlur > 0 : p.conversationBlur > 0 && isConversationSurface(el))));
     if (rightGlass === 'liquid' && rightBounds && !rightBackdrop.hidden) liquidSurfaces.unshift(rightBackdrop);
     // Card bevels refract the continuous scene rather than sampling untouched
     // wallpaper through it. This prevents a clear ring around a tinted card.
@@ -737,11 +781,12 @@ ${saoBetterSidebarCSS(materialBase)}
   const structure = '[data-sao-settings],[data-slot],[data-dockkit-content],[data-dockkit-empty],[data-dockkit-strip],[data-sidebar-right-panel],[data-sao-material],' + windowSelector + ',' + componentSelector + ',' + contextRootSelector + ',' + contextCardSelector + ',' + rightPaneSelector + ',' + browserRootSelector;
   const observer = new MutationObserver(records => {
     if (records.some(r => {
+      if (r.type === 'attributes' && ['hidden','aria-hidden','inert','style','class'].includes(r.attributeName) && (r.target.matches?.('[data-slot="main.conversation"]') || r.target.querySelector?.('[data-slot="main.conversation"]'))) return true;
       if (r.type === 'attributes') return (!!r.target.closest?.('[data-dsh-native-tab-host],[data-dsh-bottom-panel]') || r.target.matches?.(windowSelector + ',' + contextRootSelector + ',[data-dockkit-content],[data-dockkit-host],[data-sidebar-right-session],[data-sidebar-right-panel],' + rightPaneSelector + ',' + browserRootSelector)) && (!['style','class'].includes(r.attributeName) || !touched.has(r.target));
       return r.type === 'childList' && [...r.addedNodes,...r.removedNodes].some(n => n.nodeType === 1 && !n.matches?.('[data-sao-liquid],[data-sao-wallpaper]') && (r.target.closest?.(rightPaneSelector) || n.matches?.(structure) || n.firstElementChild && n.querySelector?.(structure)));
     })) schedule();
   });
-  observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
+  observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','inert','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
   const materialKeys = Object.keys(defaults).filter(key => !['startup','animation','voice','sound','volume','accent','accentProfiles','theme'].includes(key));
   const samePreference = (a, b, key) => key.endsWith('SceneProfiles') || key === 'accentProfiles' ? JSON.stringify(a[key]) === JSON.stringify(b[key]) : Object.is(a[key], b[key]);
   const onStorage = event => {
@@ -935,7 +980,7 @@ ${saoBetterSidebarCSS(materialBase)}
     for (const el of contextTouched) el.removeAttribute('data-sao-context'); contextTouched.clear();
     videoWallpaper.dispose(); liquid.dispose(); paletteStyle.remove(); style.remove(); background.remove(); image.onload = image.onerror = null;
     if (customURL) URL.revokeObjectURL(customURL); if (customPosterURL) URL.revokeObjectURL(customPosterURL); for (const cleanup of panelDisposers) cleanup(); panelDisposers.clear(); subscribers.clear();
-    for (const el of touched) { el.style.removeProperty('--sao-surface-alpha'); el.removeAttribute('data-sao-material'); el.removeAttribute('data-sao-positioned'); el.removeAttribute('data-sao-surface'); el.removeAttribute('data-sao-zone'); } touched.clear();
+    for (const el of touched) { el.style.removeProperty('--sao-surface-alpha'); for (const attr of materialAttributes) el.removeAttribute(attr); } touched.clear();
     window[Symbol.for('dsh.sao.startup.v3')]?.stop?.();
     if (window[instanceKey] === controller) delete window[instanceKey];
   }
