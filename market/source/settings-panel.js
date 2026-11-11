@@ -126,6 +126,8 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-btn-primary{background:var(--sao-soft);color:var(--sao-ink);border-color:var(--sao-line)}
 [data-sao-settings] .sao-btn-primary:hover{background:var(--sao-hover)}
 [data-sao-settings] .sao-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:20px}
+[data-sao-settings] .sao-startup-actions{column-gap:16px}
+[data-sao-settings] .sao-skip-note{font-size:11px;line-height:1.5;color:var(--sao-muted);white-space:nowrap}
 [data-sao-settings] .sao-font-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0}
 [data-sao-settings] .sao-font-row input{flex:1 1 180px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:var(--sao-surface)}
 [data-sao-settings] .sao-range-row{display:grid;grid-template-columns:minmax(0,9em) minmax(80px,1fr) 4ch max-content;grid-template-areas:"label slider value reset";align-items:center;gap:0 10px;margin-top:8px;padding:4px 0;border:0;border-radius:0;background:transparent;box-shadow:none}
@@ -260,7 +262,7 @@ ${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"
   <fieldset>${fieldLegend('voice', 'Link Start 语音')}<div class="sao-choices sao-compact-choices">${choice('voice', 'kirito', '桐人', '')}${choice('voice', 'asuna', '亚丝娜', '')}</div></fieldset>
   ${toggle('sound', '播放声音', '启动音效与角色语音。')}
   ${range('volume', '音量', 0, 100, '%')}
-  <div class="sao-actions"><button class="sao-btn sao-btn-primary" data-action="preview" type="button">预览启动动画</button></div>
+  <div class="sao-actions sao-startup-actions"><button class="sao-btn sao-btn-primary" data-action="preview" type="button" aria-describedby="${id('skip-note')}">预览启动动画</button><span class="sao-skip-note" id="${id('skip-note')}">点击任意地方跳过</span></div>
 </section>
 <section role="tabpanel" id="${id('panel-appearance')}" aria-labelledby="${id('tab-appearance')}" data-panel="appearance" hidden>
   <div class="sao-section-head"><h3>外观</h3></div>
@@ -946,7 +948,9 @@ ${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"
   }
   const surfacePicker = createSurfacePicker();
   const previewButton = find('[data-action="preview"]');
-  on(previewButton, 'click', () => run(() => api.preview(), '正在预览', previewButton));
+  // The modal overlay already blocks repeat clicks. Keep the trigger focusable
+  // so the startup scene can restore focus after its dissolve or immediate skip.
+  on(previewButton, 'click', () => run(() => api.preview(), '正在预览'));
   on(find('[data-action="reset-transform"]'), 'click', () => apply({ wallX: 50, wallY: 50, wallScale: 100 }));
   const upload = find('#' + id('upload'));
   on(upload, 'change', () => {

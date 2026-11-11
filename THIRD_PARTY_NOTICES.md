@@ -78,6 +78,12 @@ SOFTWARE.
 
 The adaptation samples the selected wallpaper using a shared GPU renderer, with a CSS fallback when unavailable. It does not capture DOM content, conversations or other plugins.
 
+## Liquid optics research references
+
+The 1.0.6 optical refinement studies public rendering techniques, including the convex lens profile explained by [Kube](https://kube.io/blog/liquid-glass-css-svg/), [rdev/liquid-glass-react](https://github.com/rdev/liquid-glass-react), [shuding/liquid-glass](https://github.com/shuding/liquid-glass), and the transmission materials in [Three.js](https://github.com/mrdoob/three.js) and [Drei](https://github.com/pmndrs/drei). These are references for independent equations and engineering comparison; their source code, dependencies and assets are not included in this refinement. No license is inferred for the Kube article/repository. The existing ACG adaptation attribution and license above remain applicable.
+
+This plugin uses its own rounded-boundary mask, independently derived convex quartic profile and Snell refraction, with bounded edge-only channel offsets and directional reflections. It does not snapshot the document or create one rendering context per control. Page-backed windows keep the host's native CSS background.
+
 ## Fonts, runtime and other rights
 
 The client uses host-provided React and the DSH runtime; it does not bundle either. The default font name is 方正兰亭圆_准, resolved through locally installed families 方正兰亭圆_GBK_准 / `FZLanTingYuan-M-GBK`. No font files are copied, bundled or redistributed. Referring to installed fonts grants no font license.

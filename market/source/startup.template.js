@@ -3,8 +3,9 @@
  */
 (() => {
   const key = Symbol.for('dsh.sao.startup.v3'), replayKey = Symbol.for('dsh.sao.replay.v4');
-  if (typeof window[replayKey] === 'function') return;
-  const previousStartup = window[key];
+  const implementation = '__SAO_IMPLEMENTATION__';
+  const previousReplay = window[replayKey], previousStartup = window[key];
+  if (typeof previousReplay === 'function' && previousReplay.implementation === implementation) return;
   const DEFAULTS = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65 };
   function preferences(overrides) {
     const output = { ...DEFAULTS };
@@ -30,28 +31,37 @@
     const root = document.createElement('section');
     root.id = 'sao-startup'; root.className = 'sao-start'; root.tabIndex = -1;
     root.dataset.animation = settings.animation;
+    root.dataset.implementation = implementation;
     root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Link Start 启动动画');
     const style = document.createElement('style'); style.dataset.saoLinkStart = '4';
     style.textContent = `
-#sao-startup{position:fixed!important;inset:0!important;z-index:2147483647!important;overflow:hidden;background:#fff;pointer-events:auto;isolation:isolate;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+#sao-startup{position:fixed!important;inset:0!important;z-index:2147483647!important;overflow:hidden;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;pointer-events:auto;isolation:isolate;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+/* Own every backing layer, including while an older client still marks dialogs as glass. */
+#sao-startup::before,#sao-startup::after{content:none!important;display:none!important}
+#sao-startup>[data-sao-liquid]{display:none!important}
+#sao-startup .sao-backdrop{position:absolute;inset:0;background:#fff;pointer-events:none}
 #sao-startup canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #sao-startup .sao-intro{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#10191f;color:#eefaff;font-size:clamp(32px,5vw,76px);letter-spacing:.13em;font-weight:300;pointer-events:none}
 #sao-startup button{font:12px "Segoe UI","Microsoft YaHei",sans-serif;cursor:pointer;box-sizing:border-box}
 #sao-startup button:focus-visible{outline:3px solid #f0a33b;outline-offset:3px}
-#sao-startup .sao-skip{opacity:.85;position:absolute;right:24px;top:20px;border:1px solid #78919e;background:#152430dd;color:#fff;padding:9px 15px;border-radius:3px}
+#sao-startup .sao-skip{opacity:.9;position:absolute;right:max(24px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));border:0;background:transparent;color:#475569;padding:0;border-radius:0;box-shadow:none;font-size:11px;line-height:1.5}
+#sao-startup canvas[data-renderer="static"]~.sao-skip{color:#dce9f2}
 #sao-startup .sao-skip:hover,#sao-startup .sao-skip:focus-visible{opacity:1}
 #sao-startup .sao-sound-hint{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);max-width:90%;background:#142632ed;color:#fff;border:1px solid #80b9ce;border-radius:3px;padding:11px 18px}
-@keyframes sao-startup-exit{to{opacity:0;visibility:hidden}}
+@keyframes sao-startup-exit{to{opacity:0}}
+@keyframes sao-startup-backdrop{to{opacity:0}}
 `;
+    const backdrop = document.createElement('div'); backdrop.className = 'sao-backdrop'; backdrop.setAttribute('aria-hidden', 'true');
     let canvas = document.createElement('canvas'); canvas.setAttribute('aria-hidden', 'true');
     const intro = document.createElement('div'); intro.className = 'sao-intro'; intro.textContent = 'LINK START'; intro.setAttribute('aria-hidden', 'true');
-    const skip = document.createElement('button'); skip.type = 'button'; skip.className = 'sao-skip'; skip.textContent = '点击任意位置跳过 · Esc';
+    const skip = document.createElement('button'); skip.type = 'button'; skip.className = 'sao-skip'; skip.textContent = '点击任意地方跳过'; skip.setAttribute('aria-keyshortcuts', 'Escape');
     const hint = document.createElement('button'); hint.type = 'button'; hint.className = 'sao-sound-hint'; hint.textContent = '浏览器已阻止自动声音 · 点击任意位置跳过'; hint.hidden = true;
     const previousFocus = document.activeElement, motion = matchMedia('(prefers-reduced-motion: reduce)');
     let done = false, worker = null, workerURL = null, renderer = null, frame = 0, timer = 0, epoch = 0, sound = null;
-    let initTimer = 0, mode = 'static';
+    let initTimer = 0, mode = 'static', exitStarted = false, lastCoverage = 0;
     const view = { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 };
     const engine = settings.animation === '2' ? ThinSAO : NativeSAO;
+    const exitEarliest = settings.animation === '2' ? SAO_EXIT.earliest : SAO_EXIT.nativeEarliest;
     const state = { stop: finish, finished: false };
     window[key] = state;
     function finish() {
@@ -65,6 +75,14 @@
       if (root.contains(document.activeElement) && previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
       root.remove(); state.finished = true;
       if (window[key] === state) window[key] = { finished: true };
+    }
+    function fadeOut(duration) {
+      if (done || exitStarted) return;
+      exitStarted = true;
+      root.style.animation = `sao-startup-exit ${duration}ms ease-in-out forwards`;
+      sound?.fade(duration);
+      clearTimeout(timer);
+      timer = setTimeout(finish, duration + 50);
     }
     function onKey(event) {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(); }
@@ -113,6 +131,13 @@
         if (done || closed) { dispose(); return null; }
         return {
           dispose,
+          fade(milliseconds) {
+            if (closed) return;
+            const now = context.currentTime;
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(gain.gain.value, now);
+            gain.gain.linearRampToValueAtTime(0, now + milliseconds / 1000);
+          },
           start() {
             if (closed) return;
             for (const node of sources) { try { node.stop(); } catch {} node.disconnect(); } sources = [];
@@ -138,9 +163,10 @@
         if (done || !worker) return;
         clearTimeout(initTimer); mode = fallback(); canvas.dataset.renderer = mode;
         if (epoch) {
-          cancelAnimationFrame(frame); clearTimeout(timer);
-          if (renderer) { frame = requestAnimationFrame(tick); timer = setTimeout(finish, 6500); }
-          else { sound?.dispose(); sound = null; hint.hidden = true; intro.style.display = 'flex'; timer = setTimeout(finish, 900); }
+          cancelAnimationFrame(frame);
+          if (!exitStarted) clearTimeout(timer);
+          if (renderer) { frame = requestAnimationFrame(tick); if (!exitStarted) timer = setTimeout(finish, 6500); }
+          else if (!exitStarted) { sound?.dispose(); sound = null; hint.hidden = true; intro.style.display = 'flex'; timer = setTimeout(finish, 900); }
         }
       }
       try {
@@ -148,7 +174,8 @@
         worker.onmessage = ({ data }) => {
           if (done) return;
           if (data.type === 'ready') { clearTimeout(initTimer); if (workerURL) URL.revokeObjectURL(workerURL); workerURL = null; }
-          else if (data.type === 'done') finish();
+          else if (data.type === 'fade') fadeOut(data.duration);
+          else if (data.type === 'done') { if (!exitStarted) finish(); }
           else if (data.type === 'unsupported') recover();
         };
         worker.onerror = event => { event.preventDefault(); recover(); };
@@ -160,8 +187,14 @@
     function tick(now) {
       if (done) return;
       const elapsed = performance.timeOrigin + now - epoch;
-      renderer.draw(elapsed - 1000);
-      if (elapsed >= 5250) { finish(); return; }
+      renderer.draw(elapsed - 1000, saoStartupBackgroundOpacity(elapsed, settings.animation));
+      if (!exitStarted && elapsed >= exitEarliest && elapsed - lastCoverage >= SAO_EXIT.interval) {
+        lastCoverage = elapsed;
+        const coverage = renderer.lightCoverage(elapsed - 1000);
+        if (coverage <= SAO_EXIT.threshold || elapsed >= SAO_EXIT.latest)
+          fadeOut(Math.max(0, Math.min(SAO_EXIT.duration, SAO_EXIT.end - elapsed)));
+      }
+      if (elapsed >= SAO_EXIT.end) { if (!exitStarted) finish(); return; }
       frame = requestAnimationFrame(tick);
     }
     function start() {
@@ -170,7 +203,13 @@
       clearTimeout(timer); cancelAnimationFrame(frame);
       root.style.animation = 'none'; void root.offsetWidth;
       if (mode === 'static') { intro.style.display = 'flex'; timer = setTimeout(finish, 900); return; }
-      root.style.animation = 'sao-startup-exit .2s linear 5.09s forwards';
+      const backgroundStart = settings.animation === '2' ? SAO_EXIT.backgroundStart : SAO_EXIT.nativeBackgroundStart;
+      // x(t)=t and y(t)=smoothstep: matches the renderers' real alpha exactly.
+      // The 40ms lead-in shares the worker epoch; loading the host never waits.
+      backdrop.style.animation = `sao-startup-backdrop ${SAO_EXIT.backgroundDuration}ms cubic-bezier(.333333,0,.666667,1) ${backgroundStart + 40}ms forwards`;
+      // Each renderer requests the final streak dissolve when its visible streaks are sparse.
+      // The opening is protected by SAO_EXIT.earliest; no GPU pixels are read back.
+      exitStarted = false; lastCoverage = 0;
       sound?.start();
       if (worker) worker.postMessage({ type: 'start', epoch });
       else frame = requestAnimationFrame(tick);
@@ -180,16 +219,21 @@
     // Queue the worker and both sounds before returning to the host. No promise
     // or module-system barrier delays the DSH frontend loading behind this root.
     try {
-      root.append(style, canvas, intro, skip, hint); document.documentElement.appendChild(root);
+      root.append(style, backdrop, canvas, intro, skip, hint); document.documentElement.appendChild(root);
       root.focus({ preventScroll: true });
       mode = prepareRenderer(); canvas.dataset.renderer = mode;
       sound = mode === 'static' ? null : prepareSound(); start();
     } catch { finish(); }
     return state;
   }
-  // The same closure owns every replay; no script elements or duplicated bundles.
-  window[replayKey] = overrides => createScene(preferences(overrides));
-  if (previousStartup) return;
+  // Replace stale same-version closures, but keep duplicate injection idempotent.
+  const replay = overrides => createScene(preferences(overrides));
+  Object.defineProperty(replay, 'implementation', { value: implementation });
+  window[replayKey] = replay;
+  if (previousStartup || typeof previousReplay === 'function') {
+    previousStartup?.stop?.();
+    return; // A client update must not replay the automatic startup over a live page.
+  }
   const settings = preferences();
   if (!settings.startup) { window[key] = { finished: true }; return; }
   createScene(settings);

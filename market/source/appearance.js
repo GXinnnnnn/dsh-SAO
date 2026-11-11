@@ -501,7 +501,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     for (const anchor of composerAnchors) if (anchor.parentElement) nodes.push(anchor.parentElement);
     if (!composerAnchors.length) for (const anchor of document.querySelectorAll('[data-slot="conversation.input.overlay"]')) if (anchor.parentElement) nodes.push(anchor.parentElement);
     const unique = [...new Set(nodes)];
-    return unique.filter(el => el instanceof HTMLElement && !el.closest('[hidden],[aria-hidden="true"]') && !el.matches(excluded) && !el.matches(componentSelector) && !el.closest('[data-whale],[data-pet],[data-sao-browser-pane]') && el.getBoundingClientRect().width > 0 && (windows.includes(el) || getComputedStyle(el).visibility === 'visible') && !(el.matches('[data-sidebar-right-panel], [data-slot="rightbar.session"] > *') && unique.some(inner => inner !== el && el.contains(inner)))).filter((el,index) => windows.includes(el) || index < windows.length + 12);
+    return unique.filter(el => el instanceof HTMLElement && !el.closest('[hidden],[aria-hidden="true"]') && !el.matches(excluded) && !el.matches(componentSelector) && !el.closest('#sao-startup,[data-whale],[data-pet],[data-sao-browser-pane]') && el.getBoundingClientRect().width > 0 && (windows.includes(el) || getComputedStyle(el).visibility === 'visible') && !(el.matches('[data-sidebar-right-panel], [data-slot="rightbar.session"] > *') && unique.some(inner => inner !== el && el.contains(inner)))).filter((el,index) => windows.includes(el) || index < windows.length + 12);
   }
   function applyTokens() {
     if (preferences.featureMode === 'startup-only') { paletteStyle.remove(); return; }
@@ -553,7 +553,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     resizeObserver?.disconnect(); adaptiveObserved.clear(); contextCardsObserved.clear(); contextViewportsObserved.clear(); rightPanesObserved.clear();
   }
   // A failed material pass must remain observable without taking down settings.
-  const runtimeState = {build:'sao-1.0.5',passes:0,error:null};
+  const runtimeState = {build:'sao-1.0.6',passes:0,error:null};
   function sync() {
     if (disposed) return;
     announceMode();
@@ -665,6 +665,9 @@ ${saoSettingsHostCSS(settingsDialogSelector)}
 [data-composer-card][data-sao-material] :is([data-input-scroll],[data-input-scroll] > div,[data-composer-input]){border-color:transparent!important;box-shadow:none!important}
 [data-rightbar-col]:has([data-sao-material]) [data-sidebar-right-panel]{border-color:transparent!important;box-shadow:none!important;background:transparent!important}
 [data-sao-material="liquid"]::before{background:color-mix(in srgb,var(--sao-material-base,#f4f6f9) var(--sao-surface-alpha),transparent)}
+/* Unknown/page-backed scenes stay native. A quiet directional rim gives them
+   depth without capturing DOM pixels or importing the conversation wallpaper. */
+[data-sao-material="liquid"][data-sao-backdrop="page"]::before{box-shadow:inset 0 1px 0 color-mix(in srgb,white calc(42% * var(--sao-optical-strength)),transparent),inset 1px 0 0 color-mix(in srgb,white calc(18% * var(--sao-optical-strength)),transparent),inset 0 -1px 0 color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) calc(15% * var(--sao-optical-strength)),transparent);background:linear-gradient(135deg,color-mix(in srgb,white calc(6% * var(--sao-optical-strength)),transparent),transparent 35%,transparent 70%,color-mix(in srgb,var(--dsw-alias-label-primary,#16212c) calc(2% * var(--sao-optical-strength)),transparent)),color-mix(in srgb,var(--sao-material-base,#f4f6f9) var(--sao-surface-alpha),transparent)}
 [data-sao-material]>[data-sao-liquid]{z-index:-1!important;border-radius:inherit;corner-shape:inherit;background:transparent;box-shadow:none;border:0}
 /* Keep the readable base; the GPU canvas is a lightweight optical overlay. */
 [data-sao-material="liquid"]:has(>[data-sao-liquid]:not([hidden]))::before{backdrop-filter:none;-webkit-backdrop-filter:none}

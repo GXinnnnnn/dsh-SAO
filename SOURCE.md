@@ -65,4 +65,6 @@ Version 1.0.3 gives settings a rounded translucent glass surface. Mount-owned st
 
 Version 1.0.4 gives settings a restrained accent tint while keeping their transparent glass material. Conversation header tabs use a separate recipe from generic controls: a transparent group, a 1.5% resting fill, a 13% selected tint, and one 14%-alpha one-pixel concentric inset stroke. Removing generic selected styling prevents the old two-pixel bottom strip and top light from stacking under the circular stroke. Hover/pressed change fill without changing the stroke geometry; keyboard focus and forced colors retain dedicated visible indicators.
 
-Subsequent patch releases increment to 1.0.5; major new features increment to 1.1.0.
+Version 1.0.6 refines liquid optics with a flat center, curved Snell-refraction edges, restrained directional reflections and bounded edge dispersion. It removes the broad isotropic white halo while preserving native selected/focus states. Page-backed windows sample their actual page rather than stale conversation wallpaper. Startup white-background alpha is independent of streaks, and content-derived implementation identities replace older replay closures safely; host HTML injection reads the current script on every request. Settings share one native glass shell and preserve independent light/dark accents.
+
+Patch releases increment from 1.0.6; major new features increment to 1.1.0.

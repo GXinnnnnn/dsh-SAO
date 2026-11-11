@@ -106,7 +106,7 @@ function assertPage(state) {
   assert.equal(state.material, 'liquid'); assert.equal(state.zone, 'window');
   assert.equal(state.page, 'page'); assert.equal(state.canvas, false, 'page-backed window owns no GPU canvas');
   assert.equal(state.filter, 'blur(12px)', 'native CSS blurs the actual backing page');
-  assert.equal(state.inspection.error, null); assert.equal(state.inspection.build, 'sao-1.0.5');
+  assert.equal(state.inspection.error, null); assert.equal(state.inspection.build, 'sao-' + JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
 }
 function assertGPU(state) {
   assert.equal(state.page, null); assert.equal(state.material, 'liquid');

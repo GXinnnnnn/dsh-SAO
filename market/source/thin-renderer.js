@@ -22,7 +22,7 @@ const ThinSAO = (() => {
           length: 0.45 + rng() * 1.5, width: 0.004 + rng() * 0.013, color: palette[Math.floor(rng() * palette.length)] };
       });
     }
-    function paint(canvas, seconds, field) {
+    function paint(canvas, seconds, field, backgroundOpacity) {
       const ctx = context;
       if (!ctx) return;
       const width = viewport?.width || canvas.clientWidth || 1280, height = viewport?.height || canvas.clientHeight || 720;
@@ -30,8 +30,12 @@ const ThinSAO = (() => {
       const pw = Math.round(width * dpr), ph = Math.round(height * dpr);
       if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Opaque fill already replaces the frame; clear only for real alpha.
+      if (backgroundOpacity < 1) ctx.clearRect(0, 0, width, height);
+      ctx.globalAlpha = backgroundOpacity;
       ctx.fillStyle = seconds < 0.72 ? '#03080d' : '#fbfdff';
       ctx.fillRect(0, 0, width, height);
+      ctx.globalAlpha = 1;
       if (seconds < 0.72) return;
       const t = seconds - 0.72;
       const camera = 2.0 * t + 2.45 * t * t;
@@ -57,19 +61,40 @@ const ThinSAO = (() => {
         ctx.lineTo(x0 - nx * half * 0.13, y0 - ny * half * 0.13);
         ctx.closePath(); ctx.fill();
       }
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = backgroundOpacity;
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, focal * 0.26);
       glow.addColorStop(0, '#ffffff'); glow.addColorStop(0.3, '#ffffffd9'); glow.addColorStop(1, '#ffffff00');
       ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
-      if (seconds < 1.02) { ctx.globalAlpha = Math.max(0, 1 - (seconds - 0.72) / 0.3); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); ctx.globalAlpha = 1; }
+      if (seconds < 1.02) { ctx.globalAlpha = backgroundOpacity * Math.max(0, 1 - (seconds - 0.72) / 0.3); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); }
+      ctx.globalAlpha = 1;
     }
-    const field = makeField();
+    const field = makeField(), meter = createSAOLightMeter();
     let disposed = false;
     return {
       particleCount: field.length,
+      lightCoverage(elapsedMs) {
+        const seconds = Math.max(0, elapsedMs + 1000) / 1000, t = seconds - 0.72;
+        const width = viewport?.width || canvas.clientWidth || 1280, height = viewport?.height || canvas.clientHeight || 720;
+        meter.begin(width, height);
+        if (t < 0 || seconds >= 5) return 0;
+        const camera = 2 * t + 2.45 * t * t, focal = Math.min(width, height) * 0.83;
+        const entry = Math.min(1, t / 0.5), exit = Math.min(1, Math.max(0, (seconds - 4.45) / 0.55));
+        for (const star of field) {
+          const z = ((star.z - camera) % 18 + 18) % 18 + 0.22;
+          if (entry * (1 - exit) * Math.min(0.88, (18.3 - z) / 5) < 0.12) continue;
+          const far = z + star.length * (0.35 + Math.min(1, t / 1.2));
+          const x0 = width / 2 + star.x / far * focal, y0 = height / 2 + star.y / far * focal;
+          const x1 = width / 2 + star.x / z * focal, y1 = height / 2 + star.y / z * focal;
+          const angle = Math.atan2(star.y, star.x), nx = -Math.sin(angle), ny = Math.cos(angle);
+          const half = Math.min(28, star.width / z * focal);
+          meter.quad([[x0 + nx * half * 0.13, y0 + ny * half * 0.13], [x1 + nx * half, y1 + ny * half],
+            [x1 - nx * half, y1 - ny * half], [x0 - nx * half * 0.13, y0 - ny * half * 0.13]]);
+        }
+        return meter.coverage;
+      },
       // Shared callers subtract the one-second voice lead-in. Restore the
       // historical total clock so its original .72s opening stays exact.
-      draw(elapsedMs) { if (!disposed) paint(canvas, Math.max(0, elapsedMs + 1000) / 1000, field); },
+      draw(elapsedMs, backgroundOpacity = 1) { if (!disposed) paint(canvas, Math.max(0, elapsedMs + 1000) / 1000, field, backgroundOpacity); },
       dispose() { disposed = true; }
     };
   }

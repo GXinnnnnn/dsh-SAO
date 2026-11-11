@@ -321,6 +321,31 @@ test('appearance isolation and async theme/reset races in native Edge', {
     assert.equal(restored.inspection.error, null);
     assert.deepEqual(await page.evaluate(() => modeEvents), ['all', 'startup-only', 'all']);
   });
+  await t.test('startup root and nested dialogs stay free of appearance material while native portals remain managed', async t => {
+    const page = await pageFor(t, { featureMode: 'all', windowGlass: 'liquid', windowOpacity: .65 });
+    const result = await page.evaluate(async () => {
+      const startup = document.createElement('section'); startup.id = 'sao-startup'; startup.setAttribute('role', 'dialog');
+      startup.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:transparent';
+      startup.innerHTML = '<canvas width="400" height="240"></canvas><section role="dialog" style="width:240px;height:120px">Startup-owned dialog</section>';
+      const portal = document.createElement('section'); portal.setAttribute('role', 'dialog');
+      portal.style.cssText = 'position:fixed;left:40px;top:60px;width:320px;height:240px'; portal.textContent = 'Normal native portal';
+      document.body.append(startup, portal); await paint();
+      const read = el => ({ attributes: [...el.attributes].filter(a => /^data-sao-/.test(a.name)).map(a => a.name),
+        background: getComputedStyle(el).backgroundColor, before: getComputedStyle(el, '::before').content,
+        liquid: el.querySelectorAll('[data-sao-liquid]').length, canvases: el.querySelectorAll('canvas').length });
+      const output = { startup: read(startup), nested: read(startup.querySelector('[role="dialog"]')),
+        portal: { zone: portal.getAttribute('data-sao-zone'), material: portal.getAttribute('data-sao-material') }, error: snapshot().inspection.error };
+      startup.remove(); portal.remove(); return output;
+    });
+    assert.deepEqual(result.startup.attributes, [], 'startup root never receives material, surface or zone ownership');
+    assert.deepEqual(result.nested.attributes, [], 'startup descendant dialogs are excluded by ancestor identity');
+    assert.equal(result.startup.background, 'rgba(0, 0, 0, 0)');
+    assert.ok(['none', 'normal'].includes(result.startup.before), 'no appearance pseudo-element obscures alpha holes');
+    assert.equal(result.startup.liquid, 0, 'no appearance GPU layer is attached to startup');
+    assert.equal(result.startup.canvases, 1, 'only the startup-owned canvas remains');
+    assert.equal(result.portal.zone, 'window', 'normal native dialog still participates in appearance');
+    assert.equal(result.portal.material, 'liquid'); assert.equal(result.error, null);
+  });
   await t.test('reset respects a newer startup-only selection delivered from another tab', async t => {
     const page = await pageFor(t, { featureMode: 'all' }, 'dark');
     const result = await page.evaluate(async () => {

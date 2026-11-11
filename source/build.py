@@ -22,7 +22,9 @@ source = (root / 'source' / 'startup.template.js').read_text(encoding='utf-8')
 renderer = (root / 'source' / 'renderer.js').read_text(encoding='utf-8')
 renderer += '\n' + (root / 'source' / 'thin-renderer.js').read_text(encoding='utf-8')
 worker = renderer + '\n' + (root / 'source' / 'worker.js').read_text(encoding='utf-8')
-for placeholder, value in [('__SAO_MEDIA__', json.dumps(media, separators=(',', ':'))), ('__SAO_WORKER__', json.dumps(worker)), ('__SAO_RENDERER__', renderer)]:
+# Internal content identity changes even when the public package version stays the same.
+implementation = hashlib.sha256((source + renderer + worker + json.dumps(media, sort_keys=True)).encode('utf-8')).hexdigest()
+for placeholder, value in [('__SAO_IMPLEMENTATION__', implementation), ('__SAO_MEDIA__', json.dumps(media, separators=(',', ':'))), ('__SAO_WORKER__', json.dumps(worker)), ('__SAO_RENDERER__', renderer)]:
     if source.count(placeholder) != 1:
         raise ValueError('Expected exactly one placeholder: ' + placeholder)
     source = source.replace(placeholder, value)

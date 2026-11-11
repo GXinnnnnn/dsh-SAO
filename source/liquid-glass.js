@@ -139,43 +139,57 @@ function createSAOLiquidGlass() {
                          (shape(p + vec2(0.0, stepSize.y)) - shape(p - vec2(0.0, stepSize.y))) / pixelSize.y);
     vec2 outward = gradient / max(length(gradient), 0.0001);
     float depth = max(0.0, -d);
-    float edge = 1.0 - smoothstep(0.0, bevel.x, depth);
     float shoulder = 1.0 - smoothstep(0.0, bevel.y, depth);
-    vec2 lens = p / max(size * 0.5, vec2(1.0));
-    // Snell refraction through a curved, finite-thickness dielectric bevel.
-    // All displacements affect wallpaper samples only; foreground DOM is intact.
-    vec3 normal = normalize(vec3(outward * (edge * 0.95 + shoulder * 0.20)
-                                + lens * 0.08, 1.0));
-    vec3 ray = refract(vec3(0.0, 0.0, -1.0), normal, 1.0 / 1.45);
-    float thickness = 24.0 + min(size.x, size.y) * 0.07;
-    // Ease displacement into the boundary so adjoining surfaces do not expose
-    // a hard strip of unrelated wallpaper at their seams.
-    float edgeFade = smoothstep(0.0, max(2.0, footprint * 2.0), depth);
-    vec2 bend = ray.xy / max(0.25, -ray.z) * min(thickness, 52.0) * edgeFade;
+    // A frosted/continuous scene already owns its center. Avoid all texture work
+    // there, rather than shading pixels that would be multiplied to zero later.
+    if (edgeOnly > 0.5 && shoulder < 0.001) discard;
+    // Independently derived convex quartic cross-section h(s)=(1-(1-s)^4)^.25.
+    // Its derivative joins a truly flat center, unlike a spherical whole-card
+    // magnifier. Clamp only the grazing tip, below the backing-pixel AA width.
+    float s = clamp(depth / bevel.x, 0.0, 1.0);
+    float q = 1.0 - s;
+    float slope = min(4.0, q*q*q / pow(max(0.002, 1.0-q*q*q*q), 0.75));
+    vec3 normal = normalize(vec3(outward * slope, 1.0));
+    vec3 ray = refract(vec3(0.0, 0.0, -1.0), normal, 1.0 / 1.5);
+    float edgeFade = smoothstep(0.0, max(1.5, footprint * 1.5), depth);
+    float thickness = min(42.0, bevel.x * 2.4);
+    vec2 bend = ray.xy / max(0.35, -ray.z) * thickness * edgeFade;
     vec2 screen = origin + local + bend;
     vec3 refracted = sampleScene(screen);
+    float edge = 1.0 - smoothstep(0.0, bevel.x, depth);
+    // Dispersion is confined to the curved rim: at most two extra reads in this
+    // band, with total red-to-blue separation <=0.85 CSS px, never on DOM text.
+    float dispersion = min(0.425, bevel.x * 0.0225) * edge * edgeFade;
+    if (dispersion > 0.04) {
+      vec2 split = outward * dispersion;
+      refracted.r = sampleScene(screen + split).r;
+      refracted.b = sampleScene(screen - split).b;
+    }
     vec2 light = normalize(vec2(-0.65, -0.8));
-    float fresnel = pow(edge, 1.8);
-    float rim = pow(max(dot(outward, light), 0.0), 3.0) * fresnel * edgeFade;
-    float shadow = pow(max(dot(outward, -light), 0.0), 3.0) * edge * edgeFade;
-    // Resolve a narrow inner reflection at the real backing-pixel footprint.
-    // The paired bright crest and shaded far edge make thickness visible without
-    // blurring the wallpaper or adding another texture sample/animation pass.
-    float crestWidth = max(1.1, footprint * 0.9);
-    float crestDepth = max(1.8, footprint * 1.2);
+    float toward = max(dot(outward, light), 0.0);
+    float away = max(dot(outward, -light), 0.0);
+    float fresnel = 0.04 + 0.96 * pow(1.0 - normal.z, 5.0);
+    // A grazing reflection belongs to a light direction, not every point on
+    // the contour. The old constant crest/fresnel tint painted a white frame.
+    float glint = pow(toward, 6.0) + 0.16 * pow(away, 8.0);
+    float rim = glint * edge * edgeFade;
+    float shadow = pow(away, 2.0) * edge * edgeFade;
+    float crestWidth = max(0.8, footprint * 0.8);
+    float crestDepth = max(1.3, footprint * 1.1);
     float crest = exp(-pow((depth - crestDepth) / crestWidth, 2.0)) * edgeFade;
-    vec3 bodyNormal = normalize(vec3(lens * 0.40, 1.0));
-    float sheen = pow(max(dot(bodyNormal, normalize(vec3(light * 0.50, 1.0))), 0.0), 24.0);
-    vec3 tint = mix(vec3(0.93, 0.96, 1.0), vec3(0.12, 0.17, 0.23), dark);
-    vec3 optical = mix(refracted, tint, 0.035) * (1.0 - shadow * 0.18)
-      + vec3(rim * 0.64 + crest * 0.26 + sheen * 0.045);
-    // CSS supplies the requested material backing. Optical accents disappear
-    // at both fully transparent and fully opaque endpoints instead of exposing
-    // the wallpaper again through a supposedly opaque window.
-    float alpha = mask * opacity * (1.0 - opacity) *
-      (0.38 + shoulder * 0.32 + fresnel * edgeFade * 0.95 + crest * 0.80 + rim * 0.18 + sheen * 0.10);
-    // A scene backdrop already supplies its one and only central fill/blur.
-    // Restrict this overlay to the bevel; never paint a sharp center over it.
+    float echo = exp(-pow((depth - bevel.x * 0.55) / max(1.2, bevel.x * 0.15), 2.0));
+    // Keep the refracted environment's hue. Bounded reflection approaches the
+    // illuminant without adding/clipping the same white energy around the rim.
+    vec3 reflection = mix(refracted, vec3(1.0), mix(0.45, 0.32, dark));
+    vec3 optical = refracted * (1.0 - shadow * 0.10 - echo * away * 0.018);
+    optical = mix(optical, reflection, fresnel * edgeFade * glint * 0.24);
+    float highlight = rim * 0.22 + crest * glint * 0.38 + echo * pow(toward, 4.0) * 0.045;
+    optical = mix(optical, vec3(1.0), clamp(highlight, 0.0, 0.6));
+    // Broad shoulders transmit the bent background quietly; narrow directional
+    // lobes supply the glint. CSS alone owns the material's fill and text contrast.
+    float strength = 4.0 * opacity * (1.0 - opacity);
+    float alpha = mask * strength * (0.035 + shoulder * 0.07 + edge * edgeFade * 0.12
+      + crest * glint * 0.24 + rim * 0.06);
     alpha *= mix(1.0, shoulder, edgeOnly);
     // Match the premultiplied drawing buffer used by GL -> 2D presentation.
     color = vec4(clamp(optical, 0.0, 1.0) * alpha, alpha);
@@ -191,7 +205,10 @@ function createSAOLiquidGlass() {
     frame = timer = 0;
   }
   function hasOpacity() {
-    for (const host of hosts.keys()) if ((surfaceOpacities.get(host) ?? opacity) > 0) return true;
+    for (const host of hosts.keys()) {
+      const amount = surfaceOpacities.get(host) ?? opacity;
+      if (amount > 0 && amount < 1) return true;
+    }
     return false;
   }
   function active() {
@@ -433,7 +450,7 @@ function createSAOLiquidGlass() {
     const visible = [];
     for (const [host, entry] of hosts) {
       const surfaceOpacity = surfaceOpacities.get(host) ?? opacity;
-      if (surfaceOpacity === 0) { toHide.push(entry); continue; }
+      if (surfaceOpacity === 0 || surfaceOpacity === 1) { toHide.push(entry); continue; }
       const bounds = host.getBoundingClientRect(), style = win.getComputedStyle(host);
       if (bounds.width < 2 || bounds.height < 2 || bounds.right <= 0 || bounds.bottom <= 0 ||
           bounds.left >= viewWidth || bounds.top >= viewHeight || !host.getClientRects().length ||
@@ -527,8 +544,8 @@ function createSAOLiquidGlass() {
         gl.uniform4f(uniforms.radiiX, corners[0][0], corners[1][0], corners[2][0], corners[3][0]);
         gl.uniform4f(uniforms.radiiY, corners[0][1], corners[1][1], corners[2][1], corners[3][1]);
         const half = Math.min(rect.width, rect.height) * 0.5;
-        gl.uniform2f(uniforms.bevel, Math.max(1, Math.min(22, half * 0.55)),
-          Math.max(1, Math.min(76, half * 0.85)));
+        gl.uniform2f(uniforms.bevel, Math.max(1, Math.min(24, half * 0.30)),
+          Math.max(1, Math.min(38, half * 0.50)));
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         if (entry.canvas.width !== width) entry.canvas.width = width;
         if (entry.canvas.height !== height) entry.canvas.height = height;
