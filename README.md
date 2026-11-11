@@ -46,6 +46,7 @@ github:GXinnnnnn/dsh-SAO#main&path:/market
 - 点击动画中的**任意位置**或按 **Esc** 即可结束本次播放；跳过按钮始终可见。
 - 浏览器限制自动声音时显示提示，点击仍会跳过；减少动态效果模式下使用静态无声开场。
 <img width="1921" height="1234" alt="image" src="https://github.com/user-attachments/assets/65b561f7-31f0-4e85-9715-f105c3d787cc" />
+<img width="3840" height="2088" alt="image" src="https://github.com/user-attachments/assets/6cc91c23-a9ab-4735-894a-f0245906bff2" />
 <img width="3840" height="2088" alt="image" src="https://github.com/user-attachments/assets/52f45081-a566-4a78-8a02-4df27a57b146" />
 
 ## 外观与配色
