@@ -4,12 +4,12 @@
  */
 // A small CPU geometry mask estimates visible streak coverage without GPU
 // readback. It is sampled only in the latter half of the startup scene.
-const SAO_EXIT = { earliest: 2400, nativeEarliest: 3800, latest: 4900, threshold: 0.18, duration: 800, end: 5250, interval: 100,
-  backgroundStart: 1600, nativeBackgroundStart: 3000, backgroundDuration: 1200 };
+const SAO_EXIT = { earliest: 3800, nativeEarliest: 3800, latest: 4900, threshold: 0.18, duration: 800, end: 5250, interval: 100,
+  backgroundStart: 3000, nativeBackgroundStart: 3000, backgroundDuration: 1200 };
 // Remove only the painted background first. Streaks keep their original color
 // and alpha, so the live application shows through the gaps between them.
-function saoStartupBackgroundOpacity(elapsed, animation) {
-  const start = animation === '2' ? SAO_EXIT.backgroundStart : SAO_EXIT.nativeBackgroundStart;
+function saoStartupBackgroundOpacity(elapsed) {
+  const start = SAO_EXIT.backgroundStart;
   const t = Math.max(0, Math.min(1, (elapsed - start) / SAO_EXIT.backgroundDuration));
   return 1 - t * t * (3 - 2 * t);
 }
@@ -39,6 +39,12 @@ function createSAOLightMeter() {
     },
     get coverage() { return covered / cells.length; }
   };
+}
+// Keep the recovered 16:9 camera unchanged. On wider windows, cover the
+// original composition proportionally instead of exposing empty side bands.
+// Both the GPU and CPU light meter must use exactly the same projection.
+function saoStartupProjection(width, height) {
+  return 2.414213487 * Math.max(1, width / height / (16 / 9));
 }
 const NativeSAO = (() => {
   const F = Math.fround;
@@ -109,14 +115,14 @@ const NativeSAO = (() => {
       return s;
     }
     const program = gl.createProgram(); resources.push(['program', program]);
-    gl.attachShader(program, shader(gl.VERTEX_SHADER, `attribute vec3 position;attribute vec4 color;uniform float camera;uniform float aspect;uniform float background;varying vec4 vColor;
-void main(){float z=position.z-camera;float f=2.414213487;gl_Position=vec4(position.x*f/aspect,position.y*f,1.002002002*z-.2002002002,z);vColor=color;}`));
+    gl.attachShader(program, shader(gl.VERTEX_SHADER, `attribute vec3 position;attribute vec4 color;uniform float camera;uniform float aspect;uniform float focal;varying vec4 vColor;
+void main(){float z=position.z-camera;float f=focal;gl_Position=vec4(position.x*f/aspect,position.y*f,1.002002002*z-.2002002002,z);vColor=color;}`));
     gl.attachShader(program, shader(gl.FRAGMENT_SHADER, `precision mediump float;varying vec4 vColor;uniform float opacity;void main(){gl_FragColor=vec4(vColor.rgb*opacity,vColor.a*opacity);}`));
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
     gl.useProgram(program);
     const position = gl.getAttribLocation(program, 'position'), color = gl.getAttribLocation(program, 'color');
-    const camera = gl.getUniformLocation(program, 'camera'), aspect = gl.getUniformLocation(program, 'aspect'), opacity = gl.getUniformLocation(program, 'opacity');
+    const camera = gl.getUniformLocation(program, 'camera'), aspect = gl.getUniformLocation(program, 'aspect'), focal = gl.getUniformLocation(program, 'focal'), opacity = gl.getUniformLocation(program, 'opacity');
     function buffer(target, data) { const b = gl.createBuffer(); resources.push(['buffer', b]); gl.bindBuffer(target, b); gl.bufferData(target, data, gl.STATIC_DRAW); return b; }
     const particles = makeField(seed), mesh = makeMesh(particles), meter = createSAOLightMeter();
     const vertices = buffer(gl.ARRAY_BUFFER, mesh.vertices), indices = buffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indices);
@@ -129,7 +135,7 @@ void main(){float z=position.z-camera;float f=2.414213487;gl_Position=vec4(posit
       lightCoverage(elapsedMs) {
         const width = viewport?.width || canvas.clientWidth || 1280, height = viewport?.height || canvas.clientHeight || 720;
         meter.begin(width, height);
-        const cameraZ = F(F(F(elapsedMs) / 35) - 40), focal = height * 2.414213487 / 2;
+        const cameraZ = F(F(F(elapsedMs) / 35) - 40), focal = height * saoStartupProjection(width, height) / 2;
         for (const p of particles) {
           const near = Math.max(0.1, p.z - cameraZ - p.length / 2), far = Math.min(100, p.z - cameraZ + p.length / 2);
           if (far <= near) continue;
@@ -150,7 +156,7 @@ void main(){float z=position.z-camera;float f=2.414213487;gl_Position=vec4(posit
         if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
         gl.viewport(0,0,pw,ph); gl.clearColor(0,0,0,0); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
         if (elapsedMs < 0 || elapsedMs >= 4250) return;
-        gl.useProgram(program); gl.uniform1f(aspect,width/height); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE);
+        gl.useProgram(program); gl.uniform1f(aspect,width/height); gl.uniform1f(focal,saoStartupProjection(width,height)); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE);
         const cameraZ = F(F(F(elapsedMs) / 35) - 40);
         const fade = Math.max(0,Math.min(1,cameraZ < -20 ? (cameraZ+40)/20 : cameraZ > 50 ? (60-cameraZ)/10 : 1));
         gl.disable(gl.DEPTH_TEST); gl.depthMask(false); bind(bg); gl.uniform1f(camera,-2*Math.min(width,height)/Math.max(width,height)); gl.uniform1f(opacity,Math.trunc(fade*255)/255 * backgroundOpacity); gl.drawArrays(gl.TRIANGLE_FAN,0,6);

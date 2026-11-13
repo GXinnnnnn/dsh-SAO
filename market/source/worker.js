@@ -1,12 +1,12 @@
-// Dedicated animation thread. Native and recovered thin renderers are prepended by build.py.
+// Dedicated animation thread. The native renderer is prepended by build.py.
 let renderer, canvas, view, epoch = 0, frame = 0, frames = 0, last = 0, maxGap = 0;
-let lastCoverage = 0, exitAt = SAO_EXIT.end, fading = false, exitEarliest = SAO_EXIT.nativeEarliest, animation = '1';
+let lastCoverage = 0, exitAt = SAO_EXIT.end, fading = false, exitEarliest = SAO_EXIT.nativeEarliest;
 function tick(now) {
   const clock = performance.timeOrigin + now;
   if (last) maxGap = Math.max(maxGap, clock - last);
   last = clock; frames++;
   const elapsed = clock - epoch;
-  renderer.draw(elapsed - 1000, saoStartupBackgroundOpacity(elapsed, animation));
+  renderer.draw(elapsed - 1000, saoStartupBackgroundOpacity(elapsed));
   if (!fading && elapsed >= exitEarliest && elapsed - lastCoverage >= SAO_EXIT.interval) {
     lastCoverage = elapsed;
     const coverage = renderer.lightCoverage(elapsed - 1000);
@@ -27,10 +27,8 @@ function tick(now) {
 onmessage = ({ data }) => {
   try {
     if (data.type === 'init') {
-      canvas = data.canvas; view = data.view; animation = data.animation;
-      const engine = data.animation === '2' ? ThinSAO : NativeSAO;
-      exitEarliest = data.animation === '2' ? SAO_EXIT.earliest : SAO_EXIT.nativeEarliest;
-      renderer = engine.createRenderer(canvas, data.seed, view);
+      canvas = data.canvas; view = data.view;
+      renderer = NativeSAO.createRenderer(canvas, data.seed, view);
       if (!renderer) throw Error('Worker renderer unavailable');
       renderer.draw(-1000); postMessage({ type: 'ready' });
     } else if (data.type === 'start') {

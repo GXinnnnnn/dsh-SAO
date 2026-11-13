@@ -1,12 +1,14 @@
 # Source and build
 
-The root package is `@local/dsh-sao-link-start` and the standalone market package is `@local/dsh-sao-market`; both use version `1.0.4` and provide the same features.
+The root package is `@local/dsh-sao-link-start` and the standalone market package is `@local/dsh-sao-market`; both use version `1.0.6` and provide the same features.
 
 The prebuilt runtime is included. `index.js` injects `startup.js` in the document head before frontend initialization. `client.js` registers the package with the DSH ModuleLoader and uses the host's React for settings, appearance and model intensity controls.
 
-- `source/startup.template.js`, `renderer.js`, `thin-renderer.js` and `worker.js` produce the startup runtime.
+- `source/startup.template.js`, `renderer.js` and `worker.js` produce the native-restoration startup runtime.
 - `source/settings-panel.js`, `appearance.js`, `liquid-glass.js`, `control-states.js`, `video-wallpaper.js` and `model-intensity.js` produce the client runtime.
-- `assets/wallpapers/` contains the nine shipped wallpaper copies. `assets/animation-previews/` contains renderer-generated preview images; the adjacent provenance records identify their sources and hashes.
+- `assets/wallpapers/` contains the nine shipped wallpaper copies; the adjacent provenance record identifies their sources and hashes.
+
+Startup presents the native-restoration Link Start scene. Settings expose automatic playback, Kirito/Asuna voice, sound, volume and an actual startup preview; voice follows the startup toggle.
 
 Appearance defaults are accent `#8CC8F4` and wallpaper `builtin-3` (SAO · 03). Composer and component backgrounds keep their 10% transparency defaults. Settings sliders use compact, softly separated label/slider/value/reset rows and wrap in narrow panels without endpoint labels.
 
@@ -28,7 +30,7 @@ Python 3 and its standard library are sufficient. From either package directory,
 python source/build-theme.py
 ```
 
-This command uses the included `startup.js`, wallpapers and animation previews. It needs no original audio archive and does not rebuild or modify `startup.js`. In the repository root it builds both packages and copies root screenshots to the market package. In the standalone market package it rebuilds that package only. `python source/build-market.py` is an equivalent compatibility entry point.
+This command uses the included `startup.js` and wallpapers. It needs no original audio archive and does not rebuild or modify `startup.js`. In the repository root it builds both packages and copies root screenshots to the market package. In the standalone market package it rebuilds that package only. `python source/build-market.py` is an equivalent compatibility entry point.
 
 ModuleLoader IDs are read from each package's manifest; the version and existing export aliases are retained. Generated files contain no timestamps. Each package keeps its own README and package-local screenshot links.
 
@@ -59,12 +61,18 @@ Reference designs: [DSH Transparent UI](https://github.com/WYH66666666/DSH-Trans
 
 Performance references: [HTML video](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/video), [Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API), [prefers-reduced-motion](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
 
-Version 1.0.2 narrows the global control rules: native menu roles and the entire SAO settings tree are excluded. Header view pills explicitly own their compact geometry and bottom spacing; the composer dock stays on one line, uses horizontal scrolling when constrained, and preserves hidden/empty/pocket opt-out behavior. Settings surfaces follow the context sidebar's light grouping and theme-accent treatment.
+## GUI adaptation and presentation
 
-Version 1.0.3 gives settings a rounded translucent glass surface. Mount-owned styles only affect the settings dialog while it contains the SAO page; switching sections releases them. The real host shares one 32px frame and a CSS backdrop, while its inner root stays transparent. The host is excluded from the GPU liquid set, and the shared window alpha/filter tokens honor the transparency endpoint. Standalone settings keep a 28px glass frame; internal groups use 22px corners and neutral hairlines, with 16px controls and small check markers. Startup-only keeps the settings page's own presentation while removing the global appearance layer.
+Startup uses one aspect-aware projection for both WebGL rendering and the CPU light-occupancy meter. The native focal scale is preserved for ordinary and portrait viewports; 21:9 and 32:9 layouts use proportional cover. The root ResizeObserver and visualViewport resize listener follow the actual visible surface during window resizing and orientation changes, with bounded backing resolution and cleanup on disposal. Background alpha and the foreground dissolve share the viewport and animation clock.
 
-Version 1.0.4 gives settings a restrained accent tint while keeping their transparent glass material. Conversation header tabs use a separate recipe from generic controls: a transparent group, a 1.5% resting fill, a 13% selected tint, and one 14%-alpha one-pixel concentric inset stroke. Removing generic selected styling prevents the old two-pixel bottom strip and top light from stacking under the circular stroke. Hover/pressed change fill without changing the stroke geometry; keyboard focus and forced colors retain dedicated visible indicators.
+Settings respond to their content-container width, including narrow side panels inside a wide desktop viewport. Voice, volume and preview controls remain reachable; segment labels and slider rows can wrap. Keyboard focus, reduced motion and click/Escape skip have dedicated behavior.
 
-Version 1.0.6 refines liquid optics with a flat center, curved Snell-refraction edges, restrained directional reflections and bounded edge dispersion. It removes the broad isotropic white halo while preserving native selected/focus states. Page-backed windows sample their actual page rather than stale conversation wallpaper. Startup white-background alpha is independent of streaks, and content-derived implementation identities replace older replay closures safely; host HTML injection reads the current script on every request. Settings share one native glass shell and preserve independent light/dark accents.
+Global control rules exclude native menus and the SAO settings tree. Header view pills own their compact geometry and bottom spacing; the composer dock stays on one line, offers horizontal scrolling when constrained, and honors hidden/empty/pocket states.
+
+The native settings window shares one 32px glass frame and a CSS backdrop, with a transparent inner root. Internal groups use 22px corners and neutral hairlines, with 16px controls and small check markers. The shared shell uses the current accent; its GPU exclusion and transparency tokens keep the material in one layer. Startup-only mode retains the settings page's own presentation.
+
+Conversation header tabs have a transparent group, a 1.5% resting fill, a 13% selected tint and one 14%-alpha one-pixel concentric inset stroke. Hover and pressed states vary the fill; keyboard focus and forced colors have visible indicators.
+
+Liquid optics combine a flat center, curved Snell-refraction edges, directional reflections and bounded edge dispersion. Native selected and focus states remain semantic controls above the material. Page-backed windows sample their visible page. Startup background alpha is independent of the streaks; content-derived implementation identities register the active replay runtime, and host HTML injection reads the current script on each request. Light and dark accents have independent saved profiles.
 
 Patch releases increment from 1.0.6; major new features increment to 1.1.0.

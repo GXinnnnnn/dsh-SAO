@@ -14,10 +14,10 @@ import test from 'node:test';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.SAO_TEST_PLAYWRIGHT ?? 'C:/DSH/graduation-office/node_modules/.pnpm/playwright@1.64.0/node_modules/playwright');
 const repo = fileURLToPath(new URL('..', import.meta.url));
-const artifacts = process.env.SAO_UPGRADE_FIXTURE ?? 'C:/SAO/releases/1.0.5/startup-white-repair/upgrade';
+const artifacts = process.env.SAO_UPGRADE_FIXTURE ?? 'C:/SAO/releases/1.0.6/native-only/verification/upgrade';
 const archive = process.env.SAO_UPGRADE_OLD_ARCHIVE ?? 'C:/SAO/backups/1.0.5-before-alpha-background/accepted.zip';
 const unfixed = process.env.SAO_UPGRADE_UNFIXED ?? 'C:/SAO/releases/1.0.5/startup-white-repair/inspection/served-index-startup-0.js';
-const inputs = ['build.py', 'renderer.js', 'thin-renderer.js', 'worker.js', 'startup.template.js'];
+const inputs = ['build.py', 'renderer.js', 'worker.js', 'startup.template.js'];
 const appearanceInputs = ['better-sidebar.js', 'liquid-glass.js', 'video-wallpaper.js', 'settings-panel.js', 'appearance.js'];
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const hashes = () => Object.fromEntries([...inputs.map(name => ['source/' + name, path.join(repo, 'source', name)]), ['index.js', path.join(repo, 'index.js')]].map(([name, file]) => [name, sha(fs.readFileSync(file))]));
@@ -47,8 +47,7 @@ function fixture() {
 // Readback is observation only. Production draws, scheduling, coverage and shaders remain intact.
 function alphaFrame(canvas, animation) {
   let rgba;
-  if (animation === '1') { const gl = canvas.getContext('webgl'); rgba = new Uint8Array(canvas.width * canvas.height * 4); gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, rgba); }
-  else rgba = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  const gl = canvas.getContext('webgl'); rgba = new Uint8Array(canvas.width * canvas.height * 4); gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
   let holes = 0, partial = 0, ink = 0, minAlpha = 255;
   for (let i = 0; i < rgba.length; i += 4) {
     const alpha = rgba[i + 3]; minAlpha = Math.min(minAlpha, alpha);
@@ -58,14 +57,14 @@ function alphaFrame(canvas, animation) {
   const pixels = canvas.width * canvas.height;
   const holePoints = [];
   for (let y = 180; y < canvas.height - 40; y += 40) for (let x = 20; x < canvas.width - 40; x += 40) {
-    const row = animation === '1' ? canvas.height - 1 - y : y;
+    const row = canvas.height - 1 - y;
     if (rgba[(row * canvas.width + x) * 4 + 3] <= minAlpha + 1) holePoints.push(y * canvas.width + x);
   }
   return { width: canvas.width, height: canvas.height, minAlpha, holes: holes / pixels, partial: partial / pixels, ink: ink / pixels, holePoints };
 }
 function workerObserve() {
   const send = self.postMessage.bind(self);
-  for (const [animation, engine] of [['1', NativeSAO], ['2', ThinSAO]]) {
+  for (const [animation, engine] of [['1', NativeSAO]]) {
     const create = engine.createRenderer;
     engine.createRenderer = function(canvas, ...args) {
       const renderer = create.call(this, canvas, ...args); if (!renderer) return renderer;
@@ -104,7 +103,7 @@ function observe(suffix) {
     upgradeSamples.push({ at: performance.now(), rootOpacity: +getComputedStyle(root).opacity, backdropOpacity: backdrop ? +getComputedStyle(backdrop).opacity : null, renderer: canvas?.dataset.renderer, implementation: root.dataset.implementation ?? null });
   }, 50);
   const auto = new URLSearchParams(location.search).has('auto');
-  localStorage.setItem('dsh-sao.preferences.v4', JSON.stringify({ startup: auto, sound: false, animation: '1' }));
+  localStorage.setItem('dsh-sao.preferences.v4', JSON.stringify({ startup: auto, sound: false, animation: new URLSearchParams(location.search).get('animation') || '1' }));
   window.rememberOld = () => { window.oldReplay = window[replayKey]; window.oldState = window[Symbol.for('dsh.sao.startup.v3')]; window.oldRoot = document.querySelector('#sao-startup'); };
   window.preview = animation => { window.previewState = window[replayKey]({ startup: true, sound: false, animation }); };
   window.snapshot = () => ({ events: upgradeEvents, samples: upgradeSamples, roots: document.querySelectorAll('#sao-startup').length, styles: document.querySelectorAll('style[data-sao-link-start]').length, marker: window[replayKey]?.implementation ?? null, replayRetained: window[replayKey] === window.oldReplay, oldFinished: window.oldState?.finished, finished: window[Symbol.for('dsh.sao.startup.v3')]?.finished, backdrop: !!document.querySelector('#sao-startup .sao-backdrop') });
@@ -184,13 +183,13 @@ test('same-version startup upgrade replaces stale closures without replaying aut
     await page.addScriptTag({ url: base + '/current.js' });
     const duplicate = await page.evaluate(() => ({ sameFunction: currentReplay === window[Symbol.for('dsh.sao.replay.v4')], sameState: currentState === window[Symbol.for('dsh.sao.startup.v3')], sameRoot: currentRoot === document.querySelector('#sao-startup'), ...snapshot() }));
     assert.equal(duplicate.sameFunction, true); assert.equal(duplicate.sameState, true); assert.equal(duplicate.sameRoot, true); assert.equal(duplicate.roots, 1); assert.equal(count(duplicate, 'replay-assigned'), 2, 'same implementation never reassigns replay'); assert.equal(duplicate.backdrop, true);
-    const start = animation === '1' ? 3000 : 1600, latestProtected = animation === '1' ? 3750 : 2350;
+    const start = 3000, latestProtected = 3750;
     await page.waitForFunction(({ start, latestProtected }) => upgradeEvents.some(e => e.type === 'worker-message' && e.data.type === 'upgrade-alpha' && e.data.elapsed > start + 180 && e.data.elapsed < latestProtected && e.data.minAlpha < 245 && e.data.ink > .001), { start, latestProtected }, { timeout: 6500 });
     await page.waitForFunction(() => previewState.finished && !document.querySelector('#sao-startup'), null, { timeout: 7000 });
     trace = await page.evaluate(() => snapshot()); const frames = trace.events.filter(e => e.type === 'worker-message' && e.data.type === 'upgrade-alpha').map(e => e.data);
     const protectedSamples = trace.samples.filter(s => s.backdropOpacity > .05 && s.backdropOpacity < .95 && s.rootOpacity === 1);
     assert.ok(protectedSamples.length >= 2, 'separate DOM backdrop actually fades while root opacity stays one');
-    assert.ok(trace.samples.some(s => s.renderer === (animation === '1' ? 'worker-webgl' : 'worker-canvas2d')), 'requested real renderer ran, without fallback');
+    assert.ok(trace.samples.some(s => s.renderer === 'worker-webgl'), 'requested real renderer ran, without fallback');
     assert.ok(trace.samples.every(s => s.implementation === trace.marker), 'scene DOM uses current implementation');
     assert.ok(frames.some(f => f.elapsed >= start + 1200 && f.holes > .03 && f.ink > .001), 'late actual RGBA buffer has transparent holes and visible foreground');
     assert.equal(count(trace, 'worker-created'), 1); assert.equal(count(trace, 'worker-terminated'), 1); assert.equal(count(trace, 'blob-created'), count(trace, 'blob-revoked'));
@@ -245,6 +244,22 @@ test('same-version startup upgrade replaces stale closures without replaying aut
     assert.match(initial.marker, /^[0-9a-f]{64}$/); assert.equal(initial.roots, 1); assert.equal(initial.backdrop, true); assert.equal(count(initial, 'replay-assigned'), 1);
     await page.addScriptTag({ url: base + '/current.js' }); const trace = await page.evaluate(() => ({ sameRoot: oldRoot === document.querySelector('#sao-startup'), ...snapshot() }));
     assert.equal(trace.replayRetained, true); assert.equal(trace.sameRoot, true); assert.equal(count(trace, 'root-added'), 1); assert.equal(count(trace, 'replay-assigned'), 1); evidence.tests.freshAutostart = trace;
+  });
+  await t.test('stored legacy animation 2 autostarts native WebGL once without stale thin engine', async t => {
+    const page = await pageFor(t, 'legacy-stored-autostart', '/fresh?auto&animation=2');
+    await page.waitForFunction(() => upgradeSamples.some(s => s.renderer === 'worker-webgl'), null, { timeout: 3000 });
+    await page.addScriptTag({ url: base + '/current.js' });
+    let trace = await page.evaluate(() => snapshot());
+    assert.equal(count(trace, 'root-added'), 1); assert.equal(count(trace, 'replay-assigned'), 1);
+    assert.equal(trace.roots, 1); assert.equal(trace.backdrop, true);
+    assert.ok(trace.samples.every(s => !s.renderer || s.renderer === 'worker-webgl'), 'legacy preference never selects Canvas2D');
+    await page.waitForFunction(() => snapshot().finished && !document.querySelector('#sao-startup'), null, { timeout: 7000 });
+    trace = await page.evaluate(() => snapshot());
+    const frames = trace.events.filter(e => e.type === 'worker-message' && e.data.type === 'upgrade-alpha').map(e => e.data);
+    assert.ok(frames.some(f => f.elapsed >= 4200 && f.holes > .03 && f.ink > .001), 'legacy autostart retains native alpha foreground');
+    assert.equal(count(trace, 'worker-created'), 1); assert.equal(count(trace, 'worker-terminated'), 1);
+    assert.equal(count(trace, 'blob-created'), count(trace, 'blob-revoked')); assert.equal(trace.roots, 0); assert.equal(trace.styles, 0);
+    evidence.tests.legacyStoredAutostart = trace;
   });
   await t.test('current host injection reads the changed sibling startup for each index request', async () => {
     const trace = await hostReadback(fs.readFileSync(path.join(repo, 'index.js'), 'utf8'), path.join(artifacts, 'host-after'), old, current);

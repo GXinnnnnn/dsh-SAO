@@ -44,7 +44,7 @@ function mountSAOSettings(container, api) {
   'use strict';
   const doc = container.ownerDocument;
   const uid = 'sao-settings-' + Math.random().toString(36).slice(2, 10);
-  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.80, headerOpacity: 0.80, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.80, wallpaper: 'builtin-3', wallpaperScope: 'full', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
+  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, voice: 'kirito', sound: true, volume: 0.65, theme: 'system', fontFamily: '方正兰亭圆_准', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: 0.90, componentOpacity: 0.90, conversationOpacity: 0.50, conversationBlur: 0, glass: 'liquid', opacity: 0.80, headerOpacity: 0.80, rightLinked: true, rightGlass: 'liquid', rightOpacity: 0.70, rightBlur: 0, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, headerLinked: true, rightHeaderOpacity: 0.80, wallpaper: 'builtin-3', wallpaperScope: 'full', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
   let prefs = Object.assign({}, defaults, api.get());
   let disposed = false, unsubscribe = null, pending = 0, operation = 0;
   let hue = 0, saturation = 0.8, brightness = 1, colorExpanded = false, hexDirty = false;
@@ -118,8 +118,6 @@ function mountSAOSettings(container, api) {
 [data-sao-settings] .sao-choice strong{display:block;font-weight:500}
 [data-sao-settings] .sao-choice small{display:block;font-size:12px;color:var(--sao-muted);margin-top:3px}
 [data-sao-settings] .sao-choice input:checked + span small{color:inherit}
-[data-sao-settings] .sao-animation-choices .sao-choice > span{justify-content:flex-start;padding:11px 10px}
-[data-sao-settings] .sao-animation-preview{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;margin-top:10px;border-radius:12px;corner-shape:round!important;border:1px solid var(--sao-line)}
 [data-sao-settings] .sao-switch-track{corner-shape:round!important}
 [data-sao-settings] .sao-btn{min-height:44px;border:1px solid var(--sao-line);border-radius:var(--sao-radius-control);background:var(--sao-surface);color:var(--sao-ink);padding:8px 14px;font-weight:400;font-size:13px;box-shadow:inset 0 1px 0 var(--sao-glint);transition:background .15s,border-color .15s}
 [data-sao-settings] .sao-btn:hover{background:var(--sao-hover);border-color:var(--sao-line)}
@@ -258,7 +256,6 @@ ${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"
   <div class="sao-section-head"><h3>启动</h3></div>
   <fieldset class="sao-feature-mode"><legend>功能模式</legend><div class="sao-mode-tabs" role="radiogroup" aria-label="功能模式">${choice('featureMode', 'all', '全部功能', '')}${choice('featureMode', 'startup-only', '仅限启动动画', '')}</div><p class="sao-hint">仅限启动动画时，保留当前其他主题的配色、字体和界面效果。</p></fieldset>
   ${toggle('startup', '启动时播放动画', '打开 DSH 时，自动播放 Link Start。')}
-  <fieldset>${fieldLegend('animation', '动画样式')}<div class="sao-choices sao-animation-choices">${choice('animation', '1', '动画 1', '还原光束')}${choice('animation', '2', '动画 2', '纤细光束')}</div></fieldset>
   <fieldset>${fieldLegend('voice', 'Link Start 语音')}<div class="sao-choices sao-compact-choices">${choice('voice', 'kirito', '桐人', '')}${choice('voice', 'asuna', '亚丝娜', '')}</div></fieldset>
   ${toggle('sound', '播放声音', '启动音效与角色语音。')}
   ${range('volume', '音量', 0, 100, '%')}
@@ -527,17 +524,6 @@ ${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"
     }
     return false;
   }
-  function ensureAnimationPreviews() {
-    const available = typeof api.animationPreviews === 'function' ? api.animationPreviews() : api.animationPreviews;
-    for (const input of controls.filter(control => control.dataset.pref === 'animation')) {
-      const content = input.nextElementSibling;
-      const item = (Array.isArray(available) ? available : []).find(preview => preview && String(preview.id) === input.value);
-      let image = content.querySelector('[data-animation-preview]');
-      if (!item || typeof item.src !== 'string' || !item.src) { if (image) image.remove(); continue; }
-      if (!image) { image = doc.createElement('img'); image.className = 'sao-animation-preview'; image.dataset.animationPreview = input.value; image.alt = '动画 ' + input.value + ' 预览'; image.decoding = 'async'; content.appendChild(image); }
-      if (image.getAttribute('src') !== item.src) image.src = item.src;
-    }
-  }
   function wallpapers() { return Array.isArray(api.wallpapers) ? api.wallpapers : []; }
   function ensureWallCards() {
     const available = wallpapers();
@@ -644,7 +630,7 @@ ${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"
     // Remove both ancestor fills below each sample, rather than stacking raw alpha.
     mask(conversation, conversationBox, [miniBox]); mask(surface, surfaceBox, childBoxes);
   }
-  const startupKeys = new Set(['startup', 'animation', 'voice', 'sound', 'volume']);
+  const startupKeys = new Set(['startup', 'voice', 'sound', 'volume']);
   const paletteKeys = new Set(['accent', 'accentProfiles', 'theme']);
   let syncedPreferences = '', syncedTheme = '', syncedWalls = [], syncedAppearancePreferences = '', syncedMaterialPreferences = '';
   function syncVideoSettings(available) {
@@ -703,7 +689,7 @@ ${saoSettingsHostCSS(':is(dialog,[role="dialog"])[data-shortcut-modal="settings"
     for (const tab of all('[data-tab]')) tab.hidden = startupOnly && tab.dataset.tab !== 'startup';
     if (startupOnly && find('[data-tab="startup"]').getAttribute('aria-selected') !== 'true') selectTab(find('[data-tab="startup"]'));
     find('.sao-preview').hidden = startupOnly;
-    surfacePicker.sync(); ensureAnimationPreviews();
+    surfacePicker.sync();
     for (const input of controls) {
       const key = input.dataset.pref;
       const value = key === 'rightHeaderOpacity' && prefs.headerLinked ? prefs.headerOpacity : prefs[key];

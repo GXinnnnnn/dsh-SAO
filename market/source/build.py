@@ -20,7 +20,6 @@ with zipfile.ZipFile(args.archive) as archive:
         media[key] = 'data:audio/wav;base64,' + base64.b64encode(data).decode('ascii')
 source = (root / 'source' / 'startup.template.js').read_text(encoding='utf-8')
 renderer = (root / 'source' / 'renderer.js').read_text(encoding='utf-8')
-renderer += '\n' + (root / 'source' / 'thin-renderer.js').read_text(encoding='utf-8')
 worker = renderer + '\n' + (root / 'source' / 'worker.js').read_text(encoding='utf-8')
 # Internal content identity changes even when the public package version stays the same.
 implementation = hashlib.sha256((source + renderer + worker + json.dumps(media, sort_keys=True)).encode('utf-8')).hexdigest()

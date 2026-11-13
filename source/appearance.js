@@ -1,7 +1,7 @@
 /* Appearance-only controller. Native DSH settings slot, global accent and disposable shell material.
  * No layout slots, positioning changes to third-party plugins, or blanket div rules.
  */
-function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
+function applySAOAppearance(ctx, React, builtins) {
   const instanceKey = Symbol.for('dsh.sao.appearance.v4');
   window[instanceKey]?.dispose?.();
   // Retire DOM left by versions that did not expose a disposable controller.
@@ -11,7 +11,7 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
   for (const el of document.querySelectorAll('[data-sao-component]')) el.removeAttribute('data-sao-component');
   for (const el of document.querySelectorAll('[data-sao-material],[data-sao-core-surface]')) for (const attr of materialAttributes) el.removeAttribute(attr);
   const KEY = 'dsh-sao.preferences.v4';
-  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallpaperScope: 'full', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
+  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, voice: 'kirito', sound: true, volume: .65, accent: '#8CC8F4', surfaceColor: null, glass: 'liquid', opacity: .80, liquidOpacity: .80, frostOpacity: .50, rightLinked: true, rightGlass: 'liquid', rightOpacity: .70, rightBlur: 0, rightSceneProfiles: {}, contextGlass: 'follow', contextOpacity: .80, contextBlur: 0, contextSceneProfiles: {}, rightLiquidOpacity: .40, rightFrostOpacity: .50, windowOpacity: 1, composerOpacity: .90, componentOpacity: .90, headerOpacity: .80, headerSceneProfiles: {}, rightHeaderOpacity: .80, headerLinked: true, wallpaper: 'builtin-3', wallpaperScope: 'full', wallX: 50, wallY: 50, wallScale: 100, wallOpacity: 1, conversationOpacity: .50, conversationBlur: 0, fontFamily: '方正兰亭圆_准', theme: 'system' };
   const accentDefaults = {light: defaults.accent, dark: defaults.accent};
   defaults.accentProfiles = {...accentDefaults};
   const themeMedia = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
@@ -93,7 +93,6 @@ function applySAOAppearance(ctx, React, builtins, animationPreviews = []) {
     if (p.featureMode === 'startup-only') n.featureMode = 'startup-only';
     if (p.videoQuality === 'still') n.videoQuality = 'still';
     for (const k of ['startup','sound','rightLinked','headerLinked']) if (typeof p[k] === 'boolean') n[k] = p[k];
-    if (p.animation === '2') n.animation = '2';
     if (p.voice === 'asuna') n.voice = 'asuna';
     for (const key of ['accent','surfaceColor']) { if (p[key] === null) n[key] = null; else if (typeof p[key] === 'string' && /^#[0-9a-f]{6}$/i.test(p[key])) n[key] = p[key].toUpperCase(); }
     if (['off','frosted','liquid'].includes(p.glass)) n.glass = p.glass;
@@ -790,7 +789,7 @@ ${saoBetterSidebarCSS(materialBase)}
     })) schedule();
   });
   observer.observe(document.body, {childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','inert','open','data-state','role','style','class','data-sidebar-right-open','data-sidebar-right-panel']});
-  const materialKeys = Object.keys(defaults).filter(key => !['startup','animation','voice','sound','volume','accent','accentProfiles','theme'].includes(key));
+  const materialKeys = Object.keys(defaults).filter(key => !['startup','voice','sound','volume','accent','accentProfiles','theme'].includes(key));
   const samePreference = (a, b, key) => key.endsWith('SceneProfiles') || key === 'accentProfiles' ? JSON.stringify(a[key]) === JSON.stringify(b[key]) : Object.is(a[key], b[key]);
   const onStorage = event => {
     if (disposed || event.key !== KEY && event.key !== null) return;
@@ -880,7 +879,6 @@ ${saoBetterSidebarCSS(materialBase)}
   const api = {
     get: () => ({ ...preferences, accentProfiles: {...preferences.accentProfiles}, rightSceneProfiles: normalizeRightScenes(preferences.rightSceneProfiles), contextSceneProfiles: normalizeRightScenes(preferences.contextSceneProfiles, contextSceneDefaults), headerSceneProfiles: normalizeRightScenes(preferences.headerSceneProfiles, headerSceneDefaults) }), status: () => notice,
     getDefault: key => Object.hasOwn(defaults, key) ? settingDefault(key, preferences) : undefined,
-    get animationPreviews() { return animationPreviews; },
     get wallpapers() { return [...builtins, ...(customURL ? [{id:'custom',name:customName,kind:customKind,meta:customMeta,src:customPosterURL || customURL}] : [])]; },
     get videoStatus() { return videoWallpaper.status; },
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },

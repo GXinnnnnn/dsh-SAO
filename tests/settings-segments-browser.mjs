@@ -25,7 +25,7 @@ body[data-ds-dark-theme]{color-scheme:dark;background:#131923;--dsw-alias-label-
 </style></head><body><main id="settings"></main></body></html>`;
 function fixture() {
   const storageKey = 'sao.segment-test.preferences';
-  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, animation: '1', voice: 'kirito', sound: true, volume: .65, theme: 'system', fontFamily: 'system-ui', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: .9, componentOpacity: .9, conversationOpacity: .5, conversationBlur: 0, glass: 'liquid', opacity: .8, headerOpacity: .8, rightLinked: true, rightGlass: 'liquid', rightOpacity: .7, rightBlur: 0, contextGlass: 'follow', contextOpacity: .8, contextBlur: 0, headerLinked: true, rightHeaderOpacity: .8, wallpaper: 'builtin-3', wallpaperScope: 'full', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
+  const defaults = { featureMode: 'all', videoQuality: 'balanced', startup: true, voice: 'kirito', sound: true, volume: .65, theme: 'system', fontFamily: 'system-ui', accent: '#8CC8F4', surfaceColor: null, windowOpacity: 1, composerOpacity: .9, componentOpacity: .9, conversationOpacity: .5, conversationBlur: 0, glass: 'liquid', opacity: .8, headerOpacity: .8, rightLinked: true, rightGlass: 'liquid', rightOpacity: .7, rightBlur: 0, contextGlass: 'follow', contextOpacity: .8, contextBlur: 0, headerLinked: true, rightHeaderOpacity: .8, wallpaper: 'builtin-3', wallpaperScope: 'full', wallOpacity: 1, wallX: 50, wallY: 50, wallScale: 100 };
   const builtin = [1, 2, 3].map(n => ({ id: 'builtin-' + n, name: '内置图片 ' + n, kind: 'image', src: '/fixture.png' }));
   const customImage = { id: 'custom', name: '自定义图片', kind: 'image', src: '/fixture.png' };
   const customVideo = { id: 'custom', name: '自定义视频', kind: 'video', src: '/fixture.png', meta: { width: 3840, height: 2160, duration: 5, bytes: 16 } };
@@ -138,7 +138,6 @@ function fixture() {
       get, set: write, getDefault: key => defaults[key],
       setTheme(mode) { document.body.toggleAttribute('data-ds-dark-theme', mode === 'dark'); write({ theme: mode }); },
       get wallpapers() { return walls; },
-      animationPreviews: [{ id: '1', src: '/fixture.png' }, { id: '2', src: '/fixture.png' }],
       subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
       resetSetting(key) { write({ [key]: defaults[key] }); },
       reset() { localStorage.setItem(storageKey, JSON.stringify(defaults)); emit(); },
@@ -215,6 +214,15 @@ test('settings segments preserve native interaction, motion continuity and condi
   const scenario = async (name, fn) => t.test(name, async () => {
     try { await fn(); results.push({ name, passed: true }); }
     catch (error) { results.push({ name, passed: false, error: error.message }); throw error; }
+  });
+
+  await scenario('native-only startup removes style choices and thumbnails while preserving voice order', async () => {
+    await page.evaluate(() => start()); await page.evaluate(() => finishSegments());
+    assert.equal(await page.locator('[data-pref="animation"]').count(), 0);
+    assert.equal(await page.locator('[data-animation-preview]').count(), 0);
+    const order = await page.locator('[data-panel="startup"] [data-pref]').evaluateAll(inputs => inputs.map(input => input.dataset.pref).filter((key, index, keys) => key !== keys[index - 1]));
+    assert.deepEqual(order, ['featureMode', 'startup', 'voice', 'sound', 'volume']);
+    assert.deepEqual(await page.locator('[data-pref="voice"]').evaluateAll(inputs => inputs.map(input => input.value)), ['kirito', 'asuna']);
   });
 
   await scenario('native radios retain labels, arrow navigation and exactly one sequential tab stop', async () => {

@@ -6,13 +6,12 @@
   const implementation = '__SAO_IMPLEMENTATION__';
   const previousReplay = window[replayKey], previousStartup = window[key];
   if (typeof previousReplay === 'function' && previousReplay.implementation === implementation) return;
-  const DEFAULTS = { startup: true, animation: '1', voice: 'kirito', sound: true, volume: 0.65 };
+  const DEFAULTS = { startup: true, voice: 'kirito', sound: true, volume: 0.65 };
   function preferences(overrides) {
     const output = { ...DEFAULTS };
     function apply(value) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return;
       for (const name of ['startup', 'sound']) if (typeof value[name] === 'boolean') output[name] = value[name];
-      if (value.animation === '1' || value.animation === '2') output.animation = value.animation;
       if (value.voice === 'kirito' || value.voice === 'asuna') output.voice = value.voice;
       if (typeof value.volume === 'number' && Number.isFinite(value.volume)) output.volume = Math.min(1, Math.max(0, value.volume));
     }
@@ -30,7 +29,7 @@
     window[key]?.stop?.();
     const root = document.createElement('section');
     root.id = 'sao-startup'; root.className = 'sao-start'; root.tabIndex = -1;
-    root.dataset.animation = settings.animation;
+    root.dataset.animation = '1'; // Legacy animation preferences always use the native scene.
     root.dataset.implementation = implementation;
     root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Link Start 启动动画');
     const style = document.createElement('style'); style.dataset.saoLinkStart = '4';
@@ -60,8 +59,8 @@
     let done = false, worker = null, workerURL = null, renderer = null, frame = 0, timer = 0, epoch = 0, sound = null;
     let initTimer = 0, mode = 'static', exitStarted = false, lastCoverage = 0;
     const view = { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 };
-    const engine = settings.animation === '2' ? ThinSAO : NativeSAO;
-    const exitEarliest = settings.animation === '2' ? SAO_EXIT.earliest : SAO_EXIT.nativeEarliest;
+    let resizeObserver = null;
+    const exitEarliest = SAO_EXIT.earliest;
     const state = { stop: finish, finished: false };
     window[key] = state;
     function finish() {
@@ -71,6 +70,7 @@
       if (workerURL) { URL.revokeObjectURL(workerURL); workerURL = null; }
       renderer?.dispose(); renderer = null; sound?.dispose(); sound = null;
       document.removeEventListener('keydown', onKey, true); document.removeEventListener('visibilitychange', onVisibility);
+      resizeObserver?.disconnect(); window.visualViewport?.removeEventListener('resize', onResize);
       window.removeEventListener('resize', onResize); window.removeEventListener('pagehide', finish); motion.removeEventListener('change', finish);
       if (root.contains(document.activeElement) && previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
       root.remove(); state.finished = true;
@@ -94,7 +94,7 @@
     }
     function onVisibility() { if (!document.hidden && !epoch) start(); else if (document.hidden && epoch) finish(); }
     function onResize() {
-      Object.assign(view, { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 });
+      Object.assign(view, { width: Math.max(1, root.clientWidth || innerWidth), height: Math.max(1, root.clientHeight || innerHeight), dpr: devicePixelRatio || 1 });
       if (worker) worker.postMessage({ type: 'resize', view });
     }
     root.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); finish(); }, true);
@@ -153,8 +153,8 @@
       worker?.terminate(); worker = null;
       if (workerURL) { URL.revokeObjectURL(workerURL); workerURL = null; }
       const replacement = document.createElement('canvas'); replacement.setAttribute('aria-hidden', 'true'); canvas.replaceWith(replacement); canvas = replacement;
-      try { renderer = engine.createRenderer(canvas, Date.now() >>> 0, view); } catch {}
-      return renderer ? (settings.animation === '2' ? 'canvas2d' : 'webgl') : 'static';
+      try { renderer = NativeSAO.createRenderer(canvas, Date.now() >>> 0, view); } catch {}
+      return renderer ? 'webgl' : 'static';
     }
     function prepareRenderer() {
       if (motion.matches) return 'static';
@@ -179,15 +179,15 @@
           else if (data.type === 'unsupported') recover();
         };
         worker.onerror = event => { event.preventDefault(); recover(); };
-        const offscreen = canvas.transferControlToOffscreen(); worker.postMessage({ type: 'init', canvas: offscreen, view, seed: Date.now() >>> 0, animation: settings.animation }, [offscreen]);
+        const offscreen = canvas.transferControlToOffscreen(); worker.postMessage({ type: 'init', canvas: offscreen, view, seed: Date.now() >>> 0 }, [offscreen]);
         initTimer = setTimeout(recover, 3000);
-        return settings.animation === '2' ? 'worker-canvas2d' : 'worker-webgl';
+        return 'worker-webgl';
       } catch { clearTimeout(initTimer); return fallback(); }
     }
     function tick(now) {
       if (done) return;
       const elapsed = performance.timeOrigin + now - epoch;
-      renderer.draw(elapsed - 1000, saoStartupBackgroundOpacity(elapsed, settings.animation));
+      renderer.draw(elapsed - 1000, saoStartupBackgroundOpacity(elapsed));
       if (!exitStarted && elapsed >= exitEarliest && elapsed - lastCoverage >= SAO_EXIT.interval) {
         lastCoverage = elapsed;
         const coverage = renderer.lightCoverage(elapsed - 1000);
@@ -203,7 +203,7 @@
       clearTimeout(timer); cancelAnimationFrame(frame);
       root.style.animation = 'none'; void root.offsetWidth;
       if (mode === 'static') { intro.style.display = 'flex'; timer = setTimeout(finish, 900); return; }
-      const backgroundStart = settings.animation === '2' ? SAO_EXIT.backgroundStart : SAO_EXIT.nativeBackgroundStart;
+      const backgroundStart = SAO_EXIT.backgroundStart;
       // x(t)=t and y(t)=smoothstep: matches the renderers' real alpha exactly.
       // The 40ms lead-in shares the worker epoch; loading the host never waits.
       backdrop.style.animation = `sao-startup-backdrop ${SAO_EXIT.backgroundDuration}ms cubic-bezier(.333333,0,.666667,1) ${backgroundStart + 40}ms forwards`;
@@ -221,6 +221,9 @@
     try {
       root.append(style, backdrop, canvas, intro, skip, hint); document.documentElement.appendChild(root);
       root.focus({ preventScroll: true });
+      onResize();
+      if (typeof ResizeObserver === 'function') { resizeObserver = new ResizeObserver(onResize); resizeObserver.observe(root); }
+      window.visualViewport?.addEventListener('resize', onResize);
       mode = prepareRenderer(); canvas.dataset.renderer = mode;
       sound = mode === 'static' ? null : prepareSound(); start();
     } catch { finish(); }

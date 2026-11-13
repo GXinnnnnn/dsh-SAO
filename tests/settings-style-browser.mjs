@@ -74,7 +74,7 @@ function fixture() {
     window.stop(); window.hostMode(false); ctx.theme.setTheme(theme);
     localStorage.setItem('dsh-sao.preferences.v4', JSON.stringify({ featureMode: 'all', startup: false, wallpaper: 'none', accent: '#8CC8F4', surfaceColor: null, fontFamily: 'system-ui', theme }));
     const assets = Array.from({ length: 3 }, (_, i) => ({ id: 'builtin-' + (i + 1), name: '壁纸 ' + (i + 1), src: '/assets/wallpapers/' + (i + 1) + '.webp' }));
-    window.api = applySAOAppearance(ctx, {}, assets, [{ id: '1', src: '/assets/animation-previews/native.webp' }, { id: '2', src: '/assets/animation-previews/thin.webp' }]);
+    window.api = applySAOAppearance(ctx, {}, assets);
     applySAOControlStates(ctx);
     panelCleanup = mountSAOSettings(document.querySelector('#settings'), api);
   };
@@ -156,6 +156,8 @@ function fixture() {
       textContrast: textDetails.map(item => item.contrast),
       textContrastDetails: textDetails,
       images: root.querySelectorAll('[data-animation-preview]').length,
+      animationChoices: root.querySelectorAll('[data-pref="animation"]').length,
+      voiceOrder: [...root.querySelectorAll('[data-panel="startup"] [data-pref]')].map(input => input.dataset.pref).filter((key, index, keys) => key !== keys[index - 1]),
       preview: visible(root.querySelector('.sao-preview'))
     };
   };
@@ -165,7 +167,7 @@ test('glass settings stay translucent and operable in both themes and narrow pan
   const server = http.createServer((request, response) => {
     if (request.url.startsWith('/assets/')) {
       const asset = new URL('..' + request.url, import.meta.url);
-      if (!/\/assets\/(wallpapers\/[1-3]|animation-previews\/(native|thin))\.webp$/.test(asset.pathname)) { response.writeHead(404).end(); return; }
+      if (!/\/assets\/wallpapers\/[1-3]\.webp$/.test(asset.pathname)) { response.writeHead(404).end(); return; }
       response.setHeader('Content-Type', 'image/webp'); response.end(fs.readFileSync(asset)); return;
     }
     response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html);
@@ -226,7 +228,9 @@ test('glass settings stay translucent and operable in both themes and narrow pan
         assert.ok(result.controls.every(s => s.radius >= 16 && s.alpha < .25 && s.borderChroma < 24), 'controls have rounded translucent neutral surfaces');
         assert.ok(result.tabs.filter(s => s.selected === 'false').every(s => s.alpha === 0 && s.shadow === 'none'), 'inactive tabs stay transparent');
         assert.ok(Math.min(...result.textContrast) >= 4.5, theme + '/' + tab + ' supporting text meets AA: ' + Math.min(...result.textContrast));
-        assert.equal(result.preview, true); assert.equal(result.images, 2, 'animation screenshots retained');
+        assert.equal(result.preview, true); assert.equal(result.images, 0, 'removed startup animation thumbnails stay absent');
+        assert.equal(result.animationChoices, 0, 'native-only startup has no animation selector');
+        assert.deepEqual(result.voiceOrder, ['featureMode', 'startup', 'voice', 'sound', 'volume'], 'voice follows startup and precedes sound and volume');
         if (width === 1100 || width === 375) {
           await page.evaluate(() => scrollTo(0, 0));
           const root = await page.locator('[data-sao-settings]').boundingBox();

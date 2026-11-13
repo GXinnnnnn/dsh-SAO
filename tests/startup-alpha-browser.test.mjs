@@ -1,5 +1,5 @@
 // Real Edge alpha regression. Production source/build output is never rewritten.
-// Run only after source freeze, with SAO_EXIT_FIXTURE pointing at alpha-background/fixture.
+// Run only after source freeze; fixtures retain the original pre-alpha native baseline.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,9 +12,9 @@ import test from 'node:test';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.SAO_TEST_PLAYWRIGHT ?? 'C:/DSH/graduation-office/node_modules/.pnpm/playwright@1.64.0/node_modules/playwright');
 const repo = fileURLToPath(new URL('..', import.meta.url));
-const artifacts = process.env.SAO_EXIT_FIXTURE ?? 'C:/SAO/releases/1.0.5/alpha-background/fixture';
+const artifacts = process.env.SAO_ALPHA_FIXTURE ?? 'C:/SAO/releases/1.0.6/native-only/verification/alpha';
 const baseline = process.env.SAO_ALPHA_BASELINE_SOURCE ?? 'C:/SAO/releases/1.0.5/coverage-fade/fixture/build/source';
-const inputs = ['build.py', 'renderer.js', 'thin-renderer.js', 'worker.js', 'startup.template.js'];
+const inputs = ['build.py', 'renderer.js', 'worker.js', 'startup.template.js'];
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 const hashes = () => Object.fromEntries(inputs.map(name => [name, sha(fs.readFileSync(path.join(repo, 'source', name)))]));
 function buildFixture() {
@@ -24,7 +24,7 @@ function buildFixture() {
   const result = spawnSync(process.env.SAO_TEST_PYTHON ?? 'python', [path.join(build, 'source/build.py'), '--archive', process.env.SAO_TEST_ARCHIVE ?? path.resolve(repo, '../original/SAO.zip')], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr || result.error?.message || result.stdout);
   assert.deepEqual(hashes(), sources, 'source freeze held while the original builder compiled the fixture');
-  const oldSources = Object.fromEntries(['renderer.js', 'thin-renderer.js'].map(name => [name, sha(fs.readFileSync(path.join(baseline, name)))]));
+  const oldSources = Object.fromEntries(['renderer.js'].map(name => [name, sha(fs.readFileSync(path.join(baseline, name)))]));
   return { sources, baseline: oldSources, startup: sha(fs.readFileSync(path.join(build, 'startup.js'))), builder: result.stdout.trim(), builtAt: new Date().toISOString() };
 }
 // Shared test-only reader. Returned values describe actual RGBA buffers, including
@@ -32,11 +32,9 @@ function buildFixture() {
 function readFrame(canvas, kind) {
   const width = canvas.width, height = canvas.height;
   let pixels;
-  if (kind === '1') {
-    const gl = canvas.getContext('webgl');
-    pixels = new Uint8Array(width * height * 4);
-    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-  } else pixels = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+  const gl = canvas.getContext('webgl');
+  pixels = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
   let transparent = 0, partial = 0, opaque = 0, ink = 0, minAlpha = 255, alphaSum = 0;
   const histogram = new Uint32Array(256);
   for (let i = 0; i < pixels.length; i += 4) {
@@ -49,14 +47,14 @@ function readFrame(canvas, kind) {
   while (p05Alpha < 255 && (cumulative += histogram[p05Alpha]) < width * height * .05) p05Alpha++;
   const count = width * height, holePoints = [];
   for (let y = 180; y < height - 40; y += 40) for (let x = 20; x < width - 40; x += 40) {
-    const row = kind === '1' ? height - 1 - y : y;
+    const row = height - 1 - y;
     if (pixels[(row * width + x) * 4 + 3] <= minAlpha + 1) holePoints.push(y * width + x);
   }
   return { width, height, minAlpha, p05Alpha, meanAlpha: alphaSum / count, transparent: transparent / count, partial: partial / count, opaque: opaque / count, ink: ink / count, holePoints };
 }
 function workerObserver() {
   const nativePost = self.postMessage.bind(self);
-  for (const [animation, engine] of [['1', NativeSAO], ['2', ThinSAO]]) {
+  for (const [animation, engine] of [['1', NativeSAO]]) {
     const create = engine.createRenderer;
     engine.createRenderer = function(canvas, ...args) {
       const renderer = create.call(this, canvas, ...args);
@@ -102,7 +100,7 @@ function observe(workerSuffix) {
     const sample = { at: now, elapsed, rootOpacity: +css.opacity, rootBackground: css.backgroundColor, rootAnimation: css.animationName,
       backdropOpacity: backdrop ? +backdrop.opacity : null, backdropBackground: backdrop?.backgroundColor,
       renderer: canvas.dataset.renderer, width: canvas.width, height: canvas.height, liveTicks };
-    if (canvas.dataset.renderer === 'webgl' || canvas.dataset.renderer === 'canvas2d') sample.buffer = readFrame(canvas, canvas.dataset.renderer === 'webgl' ? '1' : '2');
+    if (canvas.dataset.renderer === 'webgl') sample.buffer = readFrame(canvas, '1');
     alphaSamples.push(sample);
   }
   window.requestAnimationFrame = callback => nativeRAF(now => { callback(now); sample(now); });
@@ -161,14 +159,14 @@ test('startup background becomes real alpha independently of foreground exit', {
   fs.mkdirSync(artifacts, { recursive: true });
   const manifest = buildFixture(); fs.writeFileSync(path.join(artifacts, 'alpha-source-hashes.json'), JSON.stringify(manifest, null, 2));
   const source = name => fs.readFileSync(path.join(artifacts, 'build/source', name), 'utf8');
-  const engines = source('renderer.js') + '\n' + source('thin-renderer.js');
-  const oldEngines = fs.readFileSync(path.join(baseline, 'renderer.js'), 'utf8') + '\n' + fs.readFileSync(path.join(baseline, 'thin-renderer.js'), 'utf8');
+  const engines = source('renderer.js');
+  const oldEngines = fs.readFileSync(path.join(baseline, 'renderer.js'), 'utf8');
   assert.doesNotMatch(engines + source('worker.js') + source('startup.template.js'), /\b(?:readPixels|getImageData)\s*\(/, 'runtime has no readback');
   const server = http.createServer((request, response) => {
     response.setHeader('Cache-Control', 'no-store');
     const pathname = new URL(request.url, 'http://fixture').pathname;
     if (pathname === '/startup.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(fs.readFileSync(path.join(artifacts, 'build/startup.js'))); }
-    else if (pathname === '/engines.js') { response.setHeader('Content-Type', 'text/javascript'); response.end('window.saoEngines = (() => {\n' + engines + '\nreturn { NativeSAO, ThinSAO, SAO_EXIT, saoStartupBackgroundOpacity };})();\nwindow.saoBaseline = (() => {\n' + oldEngines + '\nreturn { NativeSAO, ThinSAO };})();'); }
+    else if (pathname === '/engines.js') { response.setHeader('Content-Type', 'text/javascript'); response.end('window.saoEngines = (() => {\n' + engines + '\nreturn { NativeSAO, SAO_EXIT, saoStartupBackgroundOpacity };})();\nwindow.saoBaseline = (() => {\n' + oldEngines + '\nreturn { NativeSAO };})();'); }
     else if (pathname === '/favicon.ico') { response.writeHead(204); response.end(); }
     else { response.setHeader('Content-Type', 'text/html;charset=utf-8'); response.end(html); }
   });
@@ -199,22 +197,21 @@ test('startup background becomes real alpha independently of foreground exit', {
     return page;
   }
 
-  await t.test('native RGBA/default pixels and thin streak color survive background-only alpha and resize', async t => {
+  await t.test('native RGBA/default pixels and streak color survive background-only alpha and resize', async t => {
     const page = await pageFor(t, 'buffers'); await page.addScriptTag({ url: base + '/engines.js' });
     const frames = await page.evaluate(() => {
       const output = { policy: [], originals: [], alpha: [], resize: [] };
-      for (const [animation, start] of [['1', 3000], ['2', 1600]]) {
+      for (const [animation, start] of [['1', 3000], ['2', 3000]]) {
         const opacity = saoEngines.saoStartupBackgroundOpacity;
         output.policy.push({ animation, start, before: opacity(start - 1, animation), first: opacity(start, animation), midpoint: opacity(start + 600, animation), last: opacity(start + 1200, animation), after: opacity(start + 1500, animation),
           samples: Array.from({ length: 25 }, (_, i) => opacity(start + i * 50, animation)) });
       }
       const read = (canvas, animation) => {
-        if (animation === '2') return canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
         const gl = canvas.getContext('webgl'), data = new Uint8Array(canvas.width * canvas.height * 4);
         gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, data); return data;
       };
       const different = (a, b) => { let count = 0, max = 0, first; for (let i = 0; i < a.length; i++) { const d = Math.abs(a[i] - b[i]); if (d) { count++; if (!first) { const pixel = i - i % 4; first = { pixel, a: Array.from(a.slice(pixel, pixel + 4)), b: Array.from(b.slice(pixel, pixel + 4)) }; } } max = Math.max(max, d); } return { count, max, first }; };
-      for (const [animation, name, seed] of [['1', 'NativeSAO', 1], ['1', 'NativeSAO', 12345], ['2', 'ThinSAO', 1]]) {
+      for (const [animation, name, seed] of [['1', 'NativeSAO', 1], ['1', 'NativeSAO', 12345]]) {
         const canvas = document.createElement('canvas'), oldCanvas = document.createElement('canvas');
         const view = { width: 640, height: 360, dpr: 1 };
         const renderer = saoEngines[name].createRenderer(canvas, seed, view), original = saoBaseline[name].createRenderer(oldCanvas, seed, { ...view });
@@ -223,34 +220,24 @@ test('startup background becomes real alpha independently of foreground exit', {
           renderer.draw(total - 1000); const defaults = read(canvas, animation);
           original.draw(total - 1000); const old = read(oldCanvas, animation);
           renderer.draw(total - 1000, 1); const explicit = read(canvas, animation);
-          // Equal readback counts keep Edge's adaptive Canvas GPU/CPU selection
-          // identical on both real contexts; unequal reads can change raster RGB.
+          // Retain equal readback histories on both real WebGL contexts.
           original.draw(total - 1000); const oldExplicit = read(oldCanvas, animation);
           output.originals.push({ animation, seed, total, defaultVsOne: different(defaults, explicit), defaultVsOriginal: different(defaults, old), explicitVsOriginal: different(explicit, oldExplicit) });
         }
-        for (const total of animation === '1' ? [3400, 3600, 4400] : [2200, 2800, 3600]) {
+        for (const total of [3400, 3600, 4400]) {
           renderer.draw(total - 1000, 1); const opaque = read(canvas, animation), originalBackgroundAlpha = readFrame(canvas, animation).p05Alpha;
           renderer.draw(total - 1000, 0); const clear = read(canvas, animation), summary = readFrame(canvas, animation);
-          let solidInk = 0, alteredSolidInk = 0, compositedInk = 0, compositionError = 0, translucentInk = 0, whiteHoles = 0;
+          let solidInk = 0, alteredSolidInk = 0, whiteHoles = 0;
           for (let i = 0; i < clear.length; i += 4) {
             const a = clear[i + 3], max = Math.max(clear[i], clear[i + 1], clear[i + 2]), min = Math.min(clear[i], clear[i + 1], clear[i + 2]);
             if (!a && opaque[i + 3] > 0) whiteHoles++;
             if (a === 255 && (max - min > 25 || max < 145)) {
               solidInk++; if (opaque.slice(i, i + 4).some((c, j) => c !== clear[i + j])) alteredSolidInk++;
             }
-            // Thin foreground has original intrinsic alpha (<= .88). Away from
-            // the white glow, compositing it over the historical background must
-            // reconstruct the unchanged original RGB within byte rounding.
-            const pixel = i / 4, x = pixel % canvas.width, y = Math.floor(pixel / canvas.width);
-            const outsideGlow = Math.hypot(x - canvas.width / 2, y - canvas.height / 2) > Math.min(view.width, view.height) * .83 * .26 + 3;
-            if (animation === '2' && outsideGlow && a >= 150 && max - min > 25) {
-              translucentInk++; let maxError = 0;
-              for (let c = 0; c < 3; c++) maxError = Math.max(maxError, Math.abs(opaque[i + c] - (clear[i + c] * a / 255 + [251, 253, 255][c] * (1 - a / 255))));
-              if (maxError <= 3) compositedInk++; compositionError = Math.max(compositionError, maxError);
-            }
+
           }
           renderer.draw(total - 1000, .5); const half = readFrame(canvas, animation);
-          output.alpha.push({ animation, seed, total, ...summary, originalBackgroundAlpha, solidInk, alteredSolidInk, whiteHoles, translucentInk, compositedInk, compositionError, half });
+          output.alpha.push({ animation, seed, total, ...summary, originalBackgroundAlpha, solidInk, alteredSolidInk, whiteHoles, half });
         }
         view.width = 720; view.height = 400;
         renderer.draw(2600, 0); const resized = readFrame(canvas, animation);
@@ -276,14 +263,8 @@ test('startup background becomes real alpha independently of foreground exit', {
     for (const frame of frames.alpha) {
       assert.ok(frame.transparent > .015 && frame.whiteHoles > 1000, 'white background and glow become actual empty RGBA pixels: ' + JSON.stringify(frame));
       assert.ok(frame.ink > .01, 'visible foreground ink remains in transparent frame');
-      if (frame.animation === '1') {
-        assert.equal(frame.alteredSolidInk, 0, 'fully covered native colored/black streak RGB and alpha stay byte exact');
-        assert.ok(frame.solidInk > 1000, 'native foreground comparison covers real fully opaque streak pixels');
-      }
-      else {
-        assert.ok(frame.translucentInk > 100, 'thin comparison covers its intrinsically translucent streak interiors');
-        assert.ok(frame.compositedInk / frame.translucentInk > .99, 'original thin ink reconstructed without foreground dimming');
-      }
+      assert.equal(frame.alteredSolidInk, 0, 'fully covered native colored/black streak RGB and alpha stay byte exact');
+      assert.ok(frame.solidInk > 1000, 'native foreground comparison covers real fully opaque streak pixels');
       assert.ok(Math.abs(frame.half.p05Alpha - frame.originalBackgroundAlpha / 2) <= 2, 'half background alpha retains the original native camera fade without an opaque matte');
     }
     for (const resize of frames.resize) {
@@ -294,9 +275,9 @@ test('startup background becomes real alpha independently of foreground exit', {
   });
 
   for (const noWorker of [false, true]) for (const animation of ['1', '2']) {
-    const name = (noWorker ? 'main' : 'worker') + '-' + (animation === '1' ? 'native' : 'thin');
+    const name = (noWorker ? 'main' : 'worker') + '-' + (animation === '1' ? 'native' : 'legacy-native');
     await t.test(name + ' reveals a concurrently updating checker app while root opacity stays one', async t => {
-      const page = await pageFor(t, name, noWorker), target = animation === '1' ? 3340 : 2020;
+      const page = await pageFor(t, name, noWorker), target = 3340;
       await page.evaluate(animation => replayAlpha(animation), animation);
       await page.waitForFunction(target => alphaSamples.some(s => s.elapsed >= target && s.rootOpacity === 1), target, { timeout: 6500 });
       const before = await screenshotMetrics(page, name + '-live-before');
@@ -318,22 +299,22 @@ test('startup background becomes real alpha independently of foreground exit', {
       assert.ok(before.holes.matchingComposedHoles >= 2, 'real measured canvas holes reveal the initial colored checker: ' + JSON.stringify(before.holes));
       assert.ok(after.holes.matchingComposedHoles >= 2, 'real measured canvas holes reveal the changed live DOM palette: ' + JSON.stringify(after.holes));
       const appLoad = during.events.find(e => e.type === 'app-loaded'); assert.equal(appLoad.rootPresent, true, 'real app code loaded concurrently beneath active startup');
-      const expectedRenderer = (noWorker ? '' : 'worker-') + (animation === '1' ? 'webgl' : 'canvas2d');
+      const expectedRenderer = (noWorker ? '' : 'worker-') + 'webgl';
       assert.ok(during.samples.some(s => s.renderer === expectedRenderer), 'requested real browser rendering path ran');
-      const eligible = during.samples.filter(s => s.elapsed >= (animation === '1' ? 3100 : 1700) && s.elapsed < (animation === '1' ? 3750 : 2350));
+      const eligible = during.samples.filter(s => s.elapsed >= 3100 && s.elapsed < 3750);
       assert.ok(eligible.length >= 3 && eligible.every(s => s.rootOpacity === 1), 'root remains fully opaque throughout protected background-only phase');
       assert.ok(eligible.some(s => s.backdropOpacity > .05 && s.backdropOpacity < .95), 'separate white DOM backdrop fades on the shared clock');
       for (const sample of eligible) {
-        const p = Math.max(0, Math.min(1, (sample.elapsed - (animation === '1' ? 3000 : 1600)) / 1200));
+        const p = Math.max(0, Math.min(1, (sample.elapsed - 3000) / 1200));
         assert.ok(Math.abs(sample.backdropOpacity - (1 - p * p * (3 - 2 * p))) < .06, 'computed DOM backdrop follows the renderer smoothstep clock');
       }
       assert.ok(eligible.every(s => s.rootBackground === 'rgba(0, 0, 0, 0)'), 'root itself carries no white matte');
       assert.ok(eligible.every(s => s.backdropBackground === 'rgb(255, 255, 255)'), 'white opening belongs to a separate DOM underlay');
       const probes = noWorker ? during.samples.filter(s => s.buffer).map(s => ({ elapsed: s.elapsed, ...s.buffer })) : during.events.filter(e => e.type === 'worker-message' && e.data.type === 'alpha-probe').map(e => e.data);
-      const partial = probes.filter(p => p.elapsed > (animation === '1' ? 3200 : 1800) && p.elapsed < (animation === '1' ? 3750 : 2350));
+      const partial = probes.filter(p => p.elapsed > 3200 && p.elapsed < 3750);
       assert.ok(partial.some(p => p.p05Alpha > 0 && p.p05Alpha < 240 && p.ink > .005), 'actual canvas background alpha falls while streaks remain');
       if (!noWorker) for (const probe of partial) {
-        const p = Math.max(0, Math.min(1, (probe.elapsed - (animation === '1' ? 3000 : 1600)) / 1200));
+        const p = Math.max(0, Math.min(1, (probe.elapsed - 3000) / 1200));
         assert.ok(Math.abs(probe.backgroundOpacity - (1 - p * p * (3 - 2 * p))) < 1e-10, 'real worker draw receives the exact shared policy value');
       }
       // Resize the live renderer as the background is becoming transparent. A
@@ -344,10 +325,10 @@ test('startup background becomes real alpha independently of foreground exit', {
       const complete = await page.evaluate(() => ({ events: alphaEvents, samples: alphaSamples, finished: alphaState.finished }));
       const resized = noWorker ? complete.samples.filter(s => s.buffer?.width === 860).map(s => ({ elapsed: s.elapsed, ...s.buffer })) : complete.events.filter(e => e.type === 'worker-message' && e.data.type === 'alpha-probe' && e.data.width === 860).map(e => e.data);
       assert.ok(resized.length >= 3, 'multiple real resized alpha buffers were sampled');
-      const zeroAt = animation === '1' ? 4200 : 2800;
+      const zeroAt = 4200;
       assert.ok(resized.some(p => p.elapsed >= zeroAt && p.transparent > .05 && p.ink > .001), 'late resized canvas retains genuine holes and visible foreground');
       for (const probe of resized) {
-        const p = Math.max(0, Math.min(1, (probe.elapsed - (noWorker ? 40 : 0) - (animation === '1' ? 3000 : 1600)) / 1200));
+        const p = Math.max(0, Math.min(1, (probe.elapsed - (noWorker ? 40 : 0) - 3000) / 1200));
         assert.ok(probe.minAlpha <= Math.ceil((1 - p * p * (3 - 2 * p)) * 255) + 3, 'resized background never flashes opaque');
       }
       assert.equal(complete.finished, true);

@@ -13,10 +13,6 @@ wallpapers = []
 for i in range(1, 10):
     data = (root / 'assets' / 'wallpapers' / f'{i}.webp').read_bytes()
     wallpapers.append({'id': f'builtin-{i}', 'name': f'SAO · {i:02}', 'src': 'data:image/webp;base64,' + base64.b64encode(data).decode('ascii')})
-previews = []
-for ident, name in [('1', 'native'), ('2', 'thin')]:
-    data = (root / 'assets' / 'animation-previews' / f'{name}.webp').read_bytes()
-    previews.append({'id': ident, 'src': 'data:image/webp;base64,' + base64.b64encode(data).decode('ascii')})
 startup = (root / 'startup.js').read_text(encoding='utf-8')
 settings = (root / 'source' / 'settings-panel.js').read_text(encoding='utf-8')
 runtime = '\n'.join((root / 'source' / name).read_text(encoding='utf-8') for name in ['liquid-glass.js', 'better-sidebar.js', 'video-wallpaper.js', 'control-states.js', 'appearance.js', 'model-intensity.js'])
@@ -37,7 +33,7 @@ for target, package in targets:
             shutil.copytree(root / rel, target / rel, dirs_exist_ok=True,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         # The market README is maintained separately; its links stay package-local.
-    code = "window.__ModuleLoader__.load({id:" + json.dumps(package) + ", factory(require) {\nconst React = require('react');\nconst WALLPAPERS = " + json.dumps(wallpapers, ensure_ascii=False, separators=(',', ':')) + ';\nconst ANIMATION_PREVIEWS = ' + json.dumps(previews, separators=(',', ':')) + ';\n' + settings + '\n' + runtime + '\nreturn {inject:[\'slots\',\'theme\',\'sessions\',\'modelDirectories\',\'remote\',\'remote.session\'], apply(ctx) {\n' + startup + '\ntry { applySAOAppearance(ctx, React, WALLPAPERS, ANIMATION_PREVIEWS); applySAOModelIntensity(ctx, React); applySAOControlStates(ctx); } catch (error) { console.error("dsh-SAO appearance initialization failed", error); throw error; }\n}};\n}});\n'
+    code = "window.__ModuleLoader__.load({id:" + json.dumps(package) + ", factory(require) {\nconst React = require('react');\nconst WALLPAPERS = " + json.dumps(wallpapers, ensure_ascii=False, separators=(',', ':')) + ';\n' + settings + '\n' + runtime + '\nreturn {inject:[\'slots\',\'theme\',\'sessions\',\'modelDirectories\',\'remote\',\'remote.session\'], apply(ctx) {\n' + startup + '\ntry { applySAOAppearance(ctx, React, WALLPAPERS); applySAOModelIntensity(ctx, React); applySAOControlStates(ctx); } catch (error) { console.error("dsh-SAO appearance initialization failed", error); throw error; }\n}};\n}});\n'
     (target / 'client.js').write_text(code, encoding='utf-8', newline='')
     manifest = copy.deepcopy(root_manifest)
     manifest['name'] = package
